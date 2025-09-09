@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лабиринт</title>
+    <style>
+        /* Стилизация тела страницы для центрирования и заполнения окна */
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            overflow: hidden; /* Запрещает прокрутку для чистого вида игры */
+        }
+        /* Контейнер игры: содержит холст и интерфейс, адаптивный размер */
+        #game-container {
+            position: relative;
+            width: 90vw;
+            max-width: 600px;
+            aspect-ratio: 1; /* Сохраняет квадратную форму игрового поля */
+        }
+        /* Стили холста: заполняет контейнер, добавляет рамку */
+        canvas {
+            width: 100%;
+            height: 100%;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+        /* Интерфейс: отображает счет, время и т.д. поверх холста */
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            text-shadow: 1px 1px 2px black; /* Улучшает читаемость на темном фоне */
+        }
+        /* Стили меню: центрированная панель для настроек игры */
+        #menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            display: block; /* Видимо по умолчанию */
+        }
+        /* Стили для полей ввода, выбора и кнопок в меню */
+        #menu input, #menu select, #menu button {
+            margin: 10px;
+            padding: 8px;
+            font-size: 16px;
+            width: 200px;
+        }
+        /* Метки в меню: жирные и с отступом для ясности */
+        #menu label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        /* Панель обучения: скрыта по умолчанию, центрирована для инструкций */
+        #tutorial {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            display: none;
+        }
+        /* Анимация пульсации: легкое масштабирование для визуального эффекта */
+        .animate-pulse {
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        /* Адаптивный дизайн: корректировка для маленьких экранов */
+        @media (max-width: 600px) {
+            #game-container {
+                width: 95vw; /* Шире для маленьких экранов */
+            }
+            #menu, #tutorial {
+                width: 80%;
+                font-size: 14px; /* Меньший шрифт для мобильных */
+            }
+            #menu input, #menu select, #menu button {
+                width: 90%; /* Полная ширина для удобства на мобильных */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="ui"></div> <!-- Область интерфейса для счета, времени, имени игрока, FPS -->
+        <div id="menu">
+            <h2>Игра Лабиринт</h2>
+            <label for="playerName">Имя</label>
+            <input type="text" id="playerName" placeholder="Как звать?" maxlength="20">
+            <label for="difficulty">Выбор сложности</label>
+            <select id="difficulty">
+                <option value="easy">Легко (10x10)</option>
+                <option value="medium">Нормально (15x15)</option>
+                <option value="hard">Тяжело (20x20)</option>
+            </select>
+            <label for="ballColor">Выбор цвета</label>
+            <select id="ballColor">
+                <option value="#FF0000">Красный</option>
+                <option value="#0000FF">Синий</option>
+                <option value="#00FF00">Зеленый</option>
+            </select>
+            <button onclick="resetProgress()">Сбросить прогресс</button>
+            <button onclick="startGame()">Начать игру</button>
+        </div>
+        <div id="tutorial">
+            <h2>Обучение</h2>
+            <p id="tutorial-text"></p> <!-- Динамический текст для шагов обучения -->
+            <button onclick="nextTutorial()">Далее</button>
+        </div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script> <!-- p5.js для работы с холстом и рисования -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script> <!-- Howler.js для работы со звуком -->
+    <script>
+        // Глобальные переменные для состояния игры и объектов
+        let maze, player, goal, cellSize, score, timer, gameState, difficulty, playerName;
+        let tutorialStep = 0; // Отслеживает текущий шаг обучения
+        let easterEgg = { x: 0, y: 0, found: false }; // Скрытый бонусный объект
+        let bgMusic, winSound, easterSound, startSound; // Звуковые объекты
+        let lastTime = 0; // Для вычисления времени между кадрами
+        let frameCount = 0; // Счетчик кадров для расчета FPS
+        let lastFpsTime = 0; // Метка времени для обновления FPS
+        let fps = 0; // Кадры в секунду для отображения
+        let keys = {}; // Отслеживает нажатые клавиши
+        let velocity = { x: 0, y: 0 }; // Скорость движения игрока
+        let mouseControl = { active: false, targetX: 0, targetY: 0 }; // Состояние управления мышью
+        const SPEED = 6; // Базовая скорость движения игрока
+        const ACCELERATION = 25; // Скорость изменения скорости
+        const FRICTION = 15; // Замедляет движение игрока
+        let lastTimerUpdate = 0; // Метка времени для обновления таймера
+
+        // Загрузка звуковых файлов с помощью Howler.js
+        function loadSounds() {
+            try {
+                bgMusic = new Howl({
+                    src: ['sound/fon.mp3'], // Фоновая музыка
+                    loop: true, // Зациклена для непрерывного воспроизведения
+                    volume: 0.3,
+                    onload: () => console.log('Фоновый звук загружен успешно'),
+                    onloaderror: (id, error) => console.error('Ошибка загрузки фонового звука:', error),
+                    onplayerror: (id, error) => console.error('Ошибка воспроизведения фонового звука:', error)
+                });
+                winSound = new Howl({
+                    src: ['sound/finish.mp3'], // Звук победы
+                    onload: () => console.log('Звук победы загружен успешно'),
+                    onloaderror: (id, error) => console.error('Ошибка загрузки звука победы:', error),
+                    onplayerror: (id, error) => console.error('Ошибка воспроизведения звука победы:', error)
+                });
+                easterSound = new Howl({
+                    src: ['sound/bonus.mp3'], // Звук для пасхального яйца
+                    onload: () => console.log('Звук пасхального яйца загружен успешно'),
+                    onloaderror: (id, error) => console.error('Ошибка загрузки звука пасхального яйца:', error),
+                    onplayerror: (id, error) => console.error('Ошибка воспроизведения звука пасхального яйца:', error)
+                });
+                startSound = new Howl({
+                    src: ['sound/start.mp3'], // Звук начала игры
+                    volume: 0.5,
+                    onload: () => console.log('Звук начала игры загружен успешно'),
+                    onloaderror: (id, error) => console.error('Ошибка загрузки звука начала игры:', error),
+                    onplayerror: (id, error) => console.error('Ошибка воспроизведения звука начала игры:', error)
+                });
+            } catch (e) {
+                console.error('Ошибка при инициализации звуков:', e); // Обработка ошибок при настройке звуков
+            }
+        }
+
+        // Начальная настройка: создает холст и инициализирует игру
+        function setup() {
+            let container = document.getElementById('game-container');
+            let size = container.offsetWidth; // Получает ширину контейнера для квадратного холста
+            let canvas = createCanvas(size, size); // Создает холст p5.js
+            canvas.parent('game-container'); // Прикрепляет холст к контейнеру
+            gameState = 'menu'; // Начинает в режиме меню
+            score = 0; // Инициализирует счет
+            timer = 0; // Инициализирует таймер
+            loadProgress(); // Загружает сохраненный прогресс
+            document.getElementById('menu').style.display = 'block'; // Показывает меню
+            // Обработчик изменения цвета шарика
+            document.getElementById('ballColor').addEventListener('change', () => {
+                if (player) player.color = document.getElementById('ballColor').value;
+            });
+            loadSounds(); // Загружает звуки
+        }
+
+        // Адаптация холста при изменении размера окна
+        function windowResized() {
+            let size = document.getElementById('game-container').offsetWidth;
+            resizeCanvas(size, size); // Изменяет размер холста
+            if (maze) {
+                cellSize = size / maze[0].length; // Пересчитывает размер ячейки
+                player.r = cellSize / 4; // Обновляет радиус игрока
+            }
+        }
+
+        // Генерация лабиринта с помощью рекурсивного алгоритма
+        function generateMaze(size) {
+            let maze = Array(size).fill().map(() => Array(size).fill(1)); // Создает массив, заполненный стенами (1)
+            let stack = []; // Стек для алгоритма генерации
+            // Внутренняя функция для вырезания проходов
+            function carve(x, y) {
+                maze[y][x] = 0; // Делает клетку проходом
+                let directions = [[0, 2], [2, 0], [0, -2], [-2, 0]]; // Направления для проходов
+                directions.sort(() => Math.random() - 0.5); // Случайный порядок
+                for (let [dx, dy] of directions) {
+                    let nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < size - 1 && ny > 0 && ny < size - 1 && maze[ny][nx] === 1) {
+                        if (Math.random() < 0.7 || stack.length < size) {
+                            maze[y + dy / 2][x + dx / 2] = 0; // Убирает стену между клетками
+                            maze[ny][nx] = 0; // Делает соседнюю клетку проходом
+                            stack.push([nx, ny]); // Добавляет в стек
+                        }
+                    }
+                }
+            }
+            maze[1][1] = 0; // Начальная точка - проход
+            stack.push([1, 1]); // Начинает с точки (1, 1)
+            while (stack.length > 0) {
+                let [x, y] = stack[Math.floor(Math.random() * stack.length)]; // Выбирает случайную клетку
+                let neighbors = [[0, 2], [2, 0], [0, -2], [-2, 0]].filter(([dx, dy]) => {
+                    let nx = x + dx, ny = y + dy;
+                    return nx > 0 && nx < size - 1 && ny > 0 && ny < size - 1 && maze[ny][nx] === 1;
+                });
+                if (neighbors.length > 0) {
+                    let [dx, dy] = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    let nx = x + dx, ny = y + dy;
+                    maze[y + dy / 2][x + dx / 2] = 0; // Вырезает проход
+                    maze[ny][nx] = 0; // Делает соседнюю клетку проходом
+                    stack.push([nx, ny]); // Добавляет в стек
+                } else {
+                    stack.splice(stack.findIndex(pos => pos[0] === x && pos[1] === y), 1); // Удаляет клетку без соседей
+                }
+            }
+            // Добавляет случайные проходы для разнообразия
+            for (let i = 0; i < Math.floor(size * 0.2); i++) {
+                let x = Math.floor(Math.random() * (size - 2)) + 1;
+                let y = Math.floor(Math.random() * (size - 2)) + 1;
+                if (maze[y][x] === 1 && Math.random() < 0.3) {
+                    let directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                    let [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+                    let nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < size - 1 && ny > 0 && ny < size - 1 && maze[ny][nx] === 0) {
+                        maze[y][x] = 0; // Убирает стену для дополнительного прохода
+                    }
+                }
+            }
+            return maze; // Возвращает готовый лабиринт
+        }
+
+        // Вычисляет расстояние между двумя точками
+        function getDistance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        // Основной цикл рисования: обновляет игру каждый кадр
+        function draw() {
+            let currentTime = performance.now();
+            let deltaTime = (currentTime - lastTime) / 1000; // Время между кадрами для плавности
+            lastTime = currentTime;
+            frameCount++; // Считает кадры
+            if (currentTime - lastFpsTime >= 1000) {
+                fps = frameCount; // Вычисляет FPS
+                frameCount = 0;
+                lastFpsTime = currentTime;
+            }
+            background(0); // Очищает холст черным фоном
+            if (gameState === 'playing') { // Рисует и обновляет только в режиме игры
+                drawMaze(); // Рисует лабиринт
+                drawPlayer(); // Рисует игрока
+                drawGoal(); // Рисует цель
+                drawEasterEgg(); // Рисует пасхалку
+                updateTimer(currentTime); // Обновляет таймер
+                updatePlayer(deltaTime); // Обновляет позицию игрока
+                checkWinCondition(); // Проверяет условие победы
+                checkEasterEgg(); // Проверяет нахождение пасхалки
+                updateUI(); // Обновляет интерфейс
+            }
+        }
+
+        // Рисует лабиринт на холсте
+        function drawMaze() {
+            for (let y = 0; y < maze.length; y++) {
+                for (let x = 0; x < maze[y].length; x++) {
+                    fill(maze[y][x] === 1 ? 50 : 200); // Стены темные (50), проходы светлые (200)
+                    rect(x * cellSize, y * cellSize, cellSize, cellSize); // Рисует ячейки
+                }
+            }
+        }
+
+        // Рисует игрока как круг с обводкой
+        function drawPlayer() {
+            fill(player.color || '#FF0000'); // Заполняет цветом игрока или красным по умолчанию
+            ellipse(player.x * cellSize, player.y * cellSize, player.r * 2); // Рисует круг
+            stroke(0); // Черная обводка
+            strokeWeight(2);
+            noFill();
+            ellipse(player.x * cellSize, player.y * cellSize, player.r * 2); // Рисует контур
+            noStroke();
+        }
+
+        // Рисует цель как зеленый круг
+        function drawGoal() {
+            fill(0, 255, 0); // Зеленый цвет
+            ellipse(goal.x * cellSize, goal.y * cellSize, cellSize / 2); // Рисует цель
+        }
+
+        // Рисует пасхалку, если она не найдена
+        function drawEasterEgg() {
+            if (!easterEgg.found) {
+                fill('#FFA500'); // Оранжевый цвет
+                ellipse(easterEgg.x * cellSize, easterEgg.y * cellSize, cellSize / 2); // Рисует пасхалку
+                stroke(0); // Черная обводка
+                strokeWeight(2);
+                noFill();
+                ellipse(easterEgg.x * cellSize, easterEgg.y * cellSize, cellSize / 2); // Рисует контур
+                noStroke();
+            }
+        }
+
+        // Обновляет таймер игры
+        function updateTimer(currentTime) {
+            if (gameState === 'playing') {
+                if (currentTime - lastTimerUpdate >= 1000) { // Увеличивает каждую секунду
+                    timer += 1;
+                    lastTimerUpdate = currentTime;
+                }
+            }
+        }
+
+        // Обновляет интерфейс: счет, время, имя, FPS
+        function updateUI() {
+            let ui = document.getElementById('ui');
+            ui.innerHTML = `Счет: ${score}<br>Время: ${timer}с<br>Игрок: ${playerName}<br>FPS: ${fps}`;
+        }
+
+        // Обновляет позицию игрока с учетом ввода и коллизий
+        function updatePlayer(deltaTime) {
+            let targetVelocity = { x: 0, y: 0 }; // Целевая скорость
+            if (keys['ArrowLeft'] || keys['a']) targetVelocity.x -= SPEED; // Влево
+            if (keys['ArrowRight'] || keys['d']) targetVelocity.x += SPEED; // Вправо
+            if (keys['ArrowUp'] || keys['w']) targetVelocity.y -= SPEED; // Вверх
+            if (keys['ArrowDown'] || keys['s']) targetVelocity.y += SPEED; // Вниз
+            if (mouseControl.active && gameState === 'playing') { // Управление мышью
+                let dx = (mouseControl.targetX - player.x * cellSize) / cellSize;
+                let dy = (mouseControl.targetY - player.y * cellSize) / cellSize;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > 0.1) {
+                    targetVelocity.x += (dx / distance) * SPEED; // Движение к курсору
+                    targetVelocity.y += (dy / distance) * SPEED;
+                }
+            }
+            // Плавное изменение скорости с учетом ускорения и времени
+            velocity.x += (targetVelocity.x - velocity.x) * ACCELERATION * deltaTime;
+            velocity.y += (targetVelocity.y - velocity.y) * ACCELERATION * deltaTime;
+            // Применяет трение для замедления
+            velocity.x *= Math.pow(0.5, FRICTION * deltaTime);
+            velocity.y *= Math.pow(0.5, FRICTION * deltaTime);
+            let nextX = player.x + velocity.x * deltaTime; // Новая позиция по X
+            let nextY = player.y + velocity.y * deltaTime; // Новая позиция по Y
+            if (!checkCollisionAt(nextX, player.y)) { // Проверяет коллизию по X
+                player.x = nextX;
+            } else {
+                velocity.x = 0; // Сбрасывает скорость при столкновении
+            }
+            if (!checkCollisionAt(player.x, nextY)) { // Проверяет коллизию по Y
+                player.y = nextY;
+            } else {
+                velocity.y = 0;
+            }
+        }
+
+        // Обрабатывает нажатие мыши для управления
+        function mousePressed() {
+            if (gameState === 'playing') {
+                mouseControl.active = true; // Активирует управление мышью
+                mouseControl.targetX = mouseX; // Устанавливает цель по X
+                mouseControl.targetY = mouseY; // Устанавливает цель по Y
+            }
+        }
+
+        // Обновляет цель при перемещении мыши
+        function mouseDragged() {
+            if (gameState === 'playing') {
+                mouseControl.targetX = mouseX;
+                mouseControl.targetY = mouseY;
+            }
+        }
+
+        // Деактивирует управление мышью при отпускании
+        function mouseReleased() {
+            mouseControl.active = false;
+        }
+
+        // Проверяет коллизии игрока со стенами
+        function checkCollisionAt(nextX, nextY) {
+            let margin = player.r / cellSize; // Отступ для учета размера игрока
+            let px1 = nextX - margin, px2 = nextX + margin;
+            let py1 = nextY - margin, py2 = nextY + margin;
+            let x1 = Math.floor(px1), x2 = Math.floor(px2);
+            let y1 = Math.floor(py1), y2 = Math.floor(py2);
+            for (let y = Math.max(0, y1); y <= Math.min(maze.length - 1, y2); y++) {
+                for (let x = Math.max(0, x1); x <= Math.min(maze[0].length - 1, x2); x++) {
+                    if (maze[y][x] === 1) {
+                        return true; // Столкновение со стеной
+                    }
+                }
+            }
+            // Проверяет выход за границы лабиринта
+            return px1 < 0 || px2 > maze[0].length || py1 < 0 || py2 > maze.length;
+        }
+
+        // Проверяет условие победы
+        function checkWinCondition() {
+            if (dist(player.x, player.y, goal.x, goal.y) < 0.3) { // Если игрок близко к цели
+                winGame(); // Завершает игру
+            }
+        }
+
+        // Проверяет нахождение пасхалки
+        function checkEasterEgg() {
+            if (!easterEgg.found && dist(player.x, player.y, easterEgg.x, easterEgg.y) < 0.3) {
+                easterEgg.found = true; // Помечает пасхалку как найденную
+                score += 50; // Добавляет бонусные очки
+                if (easterSound) {
+                    if (easterSound.state() === 'loaded') {
+                        easterSound.play(); // Воспроизводит звук пасхалки
+                        console.log('Звук пасхального яйца воспроизводится');
+                    } else {
+                        console.warn('Звук пасхального яйца не загружен');
+                    }
+                } else {
+                    console.warn('Звук пасхального яйца не инициализирован');
+                }
+                saveProgress(); // Сохраняет прогресс
+            }
+        }
+
+        // Обработка победы в игре
+        function winGame() {
+            gameState = 'menu'; // Возвращает в меню
+            // Начисляет очки в зависимости от сложности
+            score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30;
+            if (winSound) {
+                if (winSound.state() === 'loaded') {
+                    winSound.play(); // Воспроизводит звук победы
+                    console.log('Звук победы воспроизводится');
+                } else {
+                    console.warn('Звук победы не загружен');
+                }
+            } else {
+                console.warn('Звук победы не инициализирован');
+            }
+            if (bgMusic) {
+                bgMusic.stop(); // Останавливает фоновую музыку
+                console.log('Фоновый звук остановлен');
+            }
+            saveProgress(); // Сохраняет прогресс
+            document.getElementById('menu').style.display = 'block'; // Показывает меню
+        }
+
+        // Сбрасывает прогресс игрока
+        function resetProgress() {
+            score = 0; // Обнуляет счет
+            localStorage.removeItem('score'); // Удаляет сохраненный счет
+            localStorage.removeItem('playerName'); // Удаляет имя
+            localStorage.removeItem('difficulty'); // Удаляет сложность
+            localStorage.removeItem('tutorialCompleted'); // Сбрасывает обучение
+            playerName = 'Игрок'; // Устанавливает имя по умолчанию
+            difficulty = 'easy'; // Устанавливает сложность по умолчанию
+            document.getElementById('playerName').value = playerName; // Обновляет поле имени
+            document.getElementById('difficulty').value = difficulty; // Обновляет поле сложности
+            updateUI(); // Обновляет интерфейс
+        }
+
+        // Запускает игру
+        function startGame() {
+            // Воспроизведение звука начала игры
+            if (startSound) {
+                if (startSound.state() === 'loaded') {
+                    startSound.play();
+                    console.log('Звук начала игры воспроизводится');
+                } else {
+                    console.warn('Звук начала игры не загружен');
+                }
+            } else {
+                console.warn('Звук начала игры не инициализирован');
+            }
+
+            playerName = document.getElementById('playerName').value.trim(); // Получает имя игрока
+            // Проверяет корректность имени
+            if (!/^[a-zA-Z0-9а-яА-Я ]{1,20}$/.test(playerName)) {
+                alert('Пожалуйста, введите корректное имя (1-20 букв или цифр)');
+                return;
+            }
+            difficulty = document.getElementById('difficulty').value; // Получает сложность
+            let size = difficulty === 'easy' ? 10 : difficulty === 'medium' ? 15 : 20; // Устанавливает размер лабиринта
+            maze = generateMaze(size); // Генерирует лабиринт
+            cellSize = width / size; // Вычисляет размер ячейки
+            player = { x: 1.5, y: 1.5, r: cellSize / 4, color: document.getElementById('ballColor').value }; // Инициализирует игрока
+            let pathCells = []; // Список клеток для проходов
+            for (let y = 1; y < size - 1; y++) {
+                for (let x = 1; x < size - 1; x++) {
+                    if (maze[y][x] === 0 && !(x === 1 && y === 1)) {
+                        pathCells.push([x, y]); // Собирает клетки проходов
+                    }
+                }
+            }
+            let minDistance = size * 0.7; // Минимальное расстояние до цели
+            let validGoalCells = pathCells.filter(([x, y]) => 
+                x >= size * 0.6 && y >= size * 0.6 &&
+                getDistance(1.5, 1.5, x + 0.5, y + 0.5) >= minDistance
+            ); // Фильтрует клетки для цели
+            if (validGoalCells.length === 0) {
+                validGoalCells = pathCells.filter(([x, y]) => 
+                    getDistance(1.5, 1.5, x + 0.5, y + 0.5) >= minDistance
+                );
+            }
+            if (validGoalCells.length === 0) validGoalCells = pathCells; // Запасной вариант
+            let [gx, gy] = validGoalCells[Math.floor(Math.random() * validGoalCells.length)];
+            goal = { x: gx + 0.5, y: gy + 0.5 }; // Устанавливает цель
+            let goalDistance = getDistance(1.5, 1.5, gx + 0.5, gy + 0.5); // Расстояние до цели
+            let validEasterCells = pathCells.filter(([x, y]) => 
+                getDistance(1.5, 1.5, x + 0.5, y + 0.5) < goalDistance * 0.8 &&
+                getDistance(gx + 0.5, gy + 0.5, x + 0.5, y + 0.5) >= size * 0.3 &&
+                !(x === gx && y === gy)
+            ); // Фильтрует клетки для пасхалки
+            if (validEasterCells.length === 0) validEasterCells = pathCells; // Запасной вариант
+            let [ex, ey] = validEasterCells[Math.floor(Math.random() * validEasterCells.length)];
+            easterEgg = { x: ex + 0.5, y: ey + 0.5, found: false }; // Устанавливает пасхалку
+            timer = 0; // Сбрасывает таймер
+            lastTimerUpdate = performance.now(); // Обновляет метку времени
+            velocity = { x: 0, y: 0 }; // Сбрасывает скорость
+            mouseControl = { active: false, targetX: 0, targetY: 0 }; // Сбрасывает управление мышью
+            gameState = localStorage.getItem('tutorialCompleted') ? 'playing' : 'tutorial'; // Проверяет, нужно ли обучение
+            document.getElementById('menu').style.display = 'none'; // Скрывает меню
+            if (gameState === 'tutorial') {
+                document.getElementById('tutorial').style.display = 'block'; // Показывает обучение
+                showTutorial();
+            } else {
+                if (bgMusic) {
+                    if (bgMusic.state() === 'loaded') {
+                        bgMusic.play(); // Воспроизводит фоновую музыку
+                        console.log('Фоновый звук воспроизводится');
+                    } else {
+                        console.warn('Фоновый звук не загружен');
+                    }
+                } else {
+                    console.warn('Фоновый звук не инициализирован');
+                }
+                saveProgress(); // Сохраняет прогресс
+            }
+        }
+
+        // Показывает шаги обучения
+        function showTutorial() {
+            let text = document.getElementById('tutorial-text');
+            if (tutorialStep === 0) {
+                text.innerHTML = 'Добро пожаловать в Лабиринт! Используйте WASD, стрелки, либо мышь, чтобы двигать шарик плавно.';
+            } else if (tutorialStep === 1) {
+                text.innerHTML = 'Доберитесь до зеленого шарика в лабиринте, чтобы победить. Избегайте темных стен!';
+            } else if (tutorialStep === 2) {
+                text.innerHTML = 'Найдите оранжевый шарик на пути, чтобы получить бонусные очки!';
+            } else {
+                localStorage.setItem('tutorialCompleted', 'true'); // Помечает обучение завершенным
+                document.getElementById('tutorial').style.display = 'none'; // Скрывает обучение
+                gameState = 'playing'; // Переходит в режим игры
+                tutorialStep = 0; // Сбрасывает шаг
+                if (bgMusic) {
+                    if (bgMusic.state() === 'loaded') {
+                        bgMusic.play(); // Воспроизводит фоновую музыку
+                        console.log('Фоновый звук воспроизводится');
+                    } else {
+                        console.warn('Фоновый звук не загружен');
+                    }
+                } else {
+                    console.warn('Фоновый звук не инициализирован');
+                }
+            }
+        }
+
+        // Переходит к следующему шагу обучения
+        function nextTutorial() {
+            tutorialStep++; // Увеличивает шаг
+            showTutorial(); // Показывает следующий текст
+        }
+
+        // Сохраняет прогресс в localStorage
+        function saveProgress() {
+            localStorage.setItem('score', score); // Сохраняет счет
+            localStorage.setItem('playerName', playerName); // Сохраняет имя
+            localStorage.setItem('difficulty', difficulty); // Сохраняет сложность
+        }
+
+        // Загружает сохраненный прогресс
+        function loadProgress() {
+            score = parseInt(localStorage.getItem('score')) || 0; // Загружает счет или 0
+            playerName = localStorage.getItem('playerName') || 'Игрок'; // Загружает имя или значение по умолчанию
+            difficulty = localStorage.getItem('difficulty') || 'easy'; // Загружает сложность или значение по умолчанию
+            document.getElementById('playerName').value = playerName; // Устанавливает имя в поле
+            document.getElementById('difficulty').value = difficulty; // Устанавливает сложность в поле
+        }
+
+        // Обрабатывает нажатие клавиш
+        function keyPressed() {
+            keys[key] = true; // Отмечает клавишу как нажатую
+        }
+
+        // Обрабатывает отпускание клавиш
+        function keyReleased() {
+            keys[key] = false; // Сбрасывает состояние клавиши
+        }
+    </script>
+</body>
+</html>
