@@ -82,13 +82,14 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 import os
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.getenv('POSTGRES_DB', 'maze_db'),
         'USER': os.getenv('POSTGRES_USER', 'maze_user'),
         'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'maze_pass'),
-        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),  # В Docker будет 'db', локально 'localhost'
         'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 }
@@ -151,3 +152,5 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 }
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
