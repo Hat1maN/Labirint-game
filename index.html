@@ -394,7 +394,7 @@
         // Обновляет интерфейс: счет, время, имя, FPS
         function updateUI() {
             let ui = document.getElementById('ui');
-            ui.innerHTML = `Счет: ${score}<br>Время: ${timer}с<br>Игрок: ${playerName}<br>FPS: ${fps}`;
+            ui.innerHTML = `Счет: ${score}<br>Время: ${Math.floor(timer)}с<br>Игрок: ${currentUser || 'Гость'}<br>FPS: ${fps}`;
         }
 
         // Обновляет позицию игрока с учетом ввода и коллизий
@@ -556,12 +556,6 @@
                 console.warn('Звук начала игры не инициализирован');
             }
 
-            playerName = document.getElementById('playerName').value.trim(); // Получает имя игрока
-            // Проверяет корректность имени
-            if (!/^[a-zA-Z0-9а-яА-Я ]{1,20}$/.test(playerName)) {
-                alert('Пожалуйста, введите корректное имя (1-20 букв или цифр)');
-                return;
-            }
             difficulty = document.getElementById('difficulty').value; // Получает сложность
             let size = difficulty === 'easy' ? 10 : difficulty === 'medium' ? 15 : 20; // Устанавливает размер лабиринта
             maze = generateMaze(size); // Генерирует лабиринт
@@ -628,6 +622,10 @@
             gameWon = false;
 
             document.getElementById('menu').style.display = 'none';
+
+            gameState = 'playing';  // Запускает рисование лабиринта в draw()
+            loop();  // Возобновляет цикл p5.js (на всякий случай, если tutorial остановил)
+       
         }
 
         // Показывает шаги обучения
