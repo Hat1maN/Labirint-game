@@ -136,6 +136,9 @@
     <script>
         // Глобальные переменные для состояния игры и объектов
         let maze, player, goal, cellSize, score, timer, gameState, difficulty, playerName;
+        const API_URL = 'http://127.0.0.1:8001/api';  // Если порт 8000 — замени 8001 на 8000
+        let accessToken = localStorage.getItem('accessToken') || null;
+        let currentUser = localStorage.getItem('currentUser') || null;  // Имя пользователя
         let tutorialStep = 0; // Отслеживает текущий шаг обучения
         let easterEgg = { x: 0, y: 0, found: false }; // Скрытый бонусный объект
         let bgMusic, winSound, easterSound, startSound; // Звуковые объекты
