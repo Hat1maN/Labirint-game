@@ -101,6 +101,7 @@
                 width: 90%; /* Полная ширина для удобства на мобильных устройств */
             }
         }
+        .tab-content { display: none; }
     </style>
 </head>
 <body>
@@ -671,6 +672,162 @@
         function keyReleased() {
             keys[key] = false; // Сбрасывает состояние клавиши
         }
+
+        // Показ таба
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
+    document.getElementById(tabId).style.display = 'block';
+    
+    // Подсветка кнопок
+    document.querySelectorAll('#menu button').forEach(btn => btn.style.fontWeight = 'normal');
+    if (tabId === 'login-tab') document.getElementById('login-tab-btn').style.fontWeight = 'bold';
+    if (tabId === 'game-tab') document.getElementById('game-tab-btn').style.fontWeight = 'bold';
+    if (tabId === 'leaderboard-tab') document.getElementById('leaderboard-tab-btn').style.fontWeight = 'bold';
+}
+
+// Регистрация
+async function register() {
+    const username = document.getElementById('reg-username').value.trim();
+    const password = document.getElementById('reg-password').value;
+    if (!username || !password) return showAuthMessage('Заполните поля!');
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/register/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            showAuthMessage('Регистрация успешна! Теперь войдите.');
+        } else {
+            showAuthMessage(data.error || 'Ошибка регистрации');
+        }
+    } catch (e) {
+        showAuthMessage('Нет связи с сервером');
+    }
+}
+
+// Логин
+async function login() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) return showAuthMessage('Заполните поля!');
+    
+    try {
+        const response = await fetch(`${API_URL}/auth/token/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            accessToken = data.access;
+            localStorage.setItem('accessToken', accessToken);
+            currentUser = username;
+            localStorage.setItem('currentUser', username);
+            updateAuthUI();
+            showAuthMessage('Вход успешный!');
+            loadLastSave(); // Загружаем сохранение
+        } else {
+            showAuthMessage('Неверный логин или пароль');
+        }
+    } catch (e) {
+        showAuthMessage('Нет связи с сервером');
+    }
+}
+
+// Выход
+function logout() {
+    accessToken = null;
+    currentUser = null;
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('currentUser');
+    updateAuthUI();
+    showTab('login-tab');
+}
+
+// Обновление UI после авторизации
+function updateAuthUI() {
+    if (currentUser) {
+        document.getElementById('welcome-message').style.display = 'block';
+        document.getElementById('username-display').textContent = currentUser;
+        document.getElementById('auth-forms').style.display = 'none';
+        showTab('game-tab'); // Авто-переход к настройкам
+        loadLeaderboard(); // Обновляем лидерборд
+    } else {
+        document.getElementById('welcome-message').style.display = 'none';
+        document.getElementById('auth-forms').style.display = 'block';
+        showTab('login-tab');
+    }
+}
+
+// Сообщения об ошибках
+function showAuthMessage(msg) {
+    document.getElementById('auth-message').textContent = msg;
+}
+
+// Загрузка лидерборда
+async function loadLeaderboard() {
+    try {
+        const response = await fetch(`${API_URL}/game/leaderboard/`);
+        const data = await response.json();
+        const list = document.getElementById('leaderboard-list');
+        list.innerHTML = '<ol>';
+        data.forEach((entry, i) => {
+            list.innerHTML += `<li>${entry.username} — ${entry.score} очков (ранг ${entry.rank})</li>`;
+        });
+        list.innerHTML += '</ol>';
+    } catch (e) {
+        document.getElementById('leaderboard-list').innerHTML = 'Не удалось загрузить лидерборд';
+    }
+}
+
+// Загрузка последнего сохранения
+async function loadLastSave() {
+    if (!accessToken) return;
+    try {
+        const response = await fetch(`${API_URL}/game/session/load/`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.score !== undefined) {
+                score = data.score || 0;
+                document.getElementById('difficulty').value = data.difficulty || 'easy';
+            }
+        }
+    } catch (e) {
+        console.log('Не удалось загрузить сохранение');
+    }
+}
+
+// Сохранение сессии при победе (вызови эту функцию в месте, где игрок достигает цели)
+async function saveGameOnWin() {
+    if (!accessToken) return; // Только если авторизован
+    
+    const sessionData = {
+        score: score,
+        difficulty: difficulty,
+        time_played: Math.floor(timer),
+        is_completed: true,
+        game_state: {} // Можно добавить JSON состояния, если нужно
+    };
+    
+    try {
+        await fetch(`${API_URL}/game/session/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify(sessionData)
+        });
+        loadLeaderboard(); // Обновляем лидерборд
+    } catch (e) {
+        console.log('Не удалось сохранить на сервер');
+    }
+}
     </script>
 </body>
 </html>
