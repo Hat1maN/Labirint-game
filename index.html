@@ -45,25 +45,37 @@
             text-shadow: 2px 2px 3px black; /* Улучшает читаемость на темном фоне */
         }
         /* Стили меню: центрированная панель для настроек игры */
-        #menu {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            display: block; /* Видимо по умолчанию */
-        }
+#menu {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.9); /* Чёрный непрозрачный фон */
+    padding: 40px;
+    border-radius: 20px;
+    color: white;
+    text-align: center;
+    width: 80%;
+    max-width: 500px;
+    z-index: 100; /* На передний план */
+    box-shadow: 0 0 40px rgba(0,0,0,0.8); /* Тень для объёма */
+}
         /* Стили для полей ввода, выбора и кнопок в меню */
-        #menu input, #menu select, #menu button {
-            margin: 10px;
-            padding: 8px;
-            font-size: 16px;
-            width: 200px;
-        }
+#menu button, #menu input, #menu select {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 10px;
+    border: none;
+    font-size: 18px;
+}
+#menu h3 {
+    margin-top: 30px;
+}
+#menu h2 {
+    margin-bottom: 30px;
+    font-size: 32px;
+}
         /* Метки в меню: жирные и с отступом для ясности */
         #menu label {
             display: block;
@@ -106,6 +118,10 @@
                 width: 90%; /* Полная ширина для удобства на мобильных устройств */
             }
         }
+
+        
+        #settings-section, #leaderboard-section { display: none; }
+        
         .tab-content {
     display: none;  
 }
@@ -118,86 +134,58 @@ input, select { padding: 10px; margin: 10px; }
 <body onload="updateAuthUI(); loadLeaderboard();">
     <div id="game-container">
         <div id="ui"></div> <!-- Область интерфейса для счета, времени, имени игрока, FPS -->
-        <div id="menu">
+<div id="menu">
     <h2>Игра Лабиринт</h2>
     
-    <!-- Приветствие (показывается только после входа) -->
     <div id="welcome-message" style="display: none; margin-bottom: 20px; font-weight: bold;">
-        Привет, <span id="username-display"></span>! 
+        Привет, <span id="username-display"></span>!
         <button onclick="logout()">Выйти</button>
     </div>
     
-    <!-- Если не авторизован — только логин/регистрация -->
-    <div id="auth-tab">
+    <div id="auth-section">
         <h3>Регистрация</h3>
-        <input type="text" id="reg-username" placeholder="Имя пользователя" style="width: 80%; padding: 10px; margin: 10px;">
-        <input type="password" id="reg-password" placeholder="Пароль" style="width: 80%; padding: 10px; margin: 10px;">
-        <button onclick="register()" style="width: 80%; padding: 10px;">Зарегистрироваться</button>
+        <input type="text" id="reg-username" placeholder="Имя пользователя">
+        <input type="password" id="reg-password" placeholder="Пароль">
+        <button onclick="register()">Зарегистрироваться</button>
         
-        <h3 style="margin-top: 30px;">Вход</h3>
-        <input type="text" id="login-username" placeholder="Имя пользователя" style="width: 80%; padding: 10px; margin: 10px;">
-        <input type="password" id="login-password" placeholder="Пароль" style="width: 80%; padding: 10px; margin: 10px;">
-        <button onclick="login()" style="width: 80%; padding: 10px;">Войти</button>
+        <h3>Вход</h3>
+        <input type="text" id="login-username" placeholder="Имя пользователя">
+        <input type="password" id="login-password" placeholder="Пароль">
+        <button onclick="login()">Войти</button>
         
-        <p id="auth-message" style="color: red; margin-top: 20px;"></p>
+        <p id="auth-message" style="color: red;"></p>
     </div>
     
-    <!-- После входа — табы -->
-    <div id="main-tabs" style="display: none;">
-        <div style="margin-bottom: 20px;">
-            <button onclick="showMainTab('settings')" id="settings-btn">Настройки</button>
-            <button onclick="showMainTab('leaderboard')" id="leaderboard-btn">Лидерборд</button>
-        </div>
+    <div id="game-sections" style="display: none;">
+        <button onclick="showGameTab('settings')">Настройки игры</button>
+        <button onclick="showGameTab('leaderboard')">Лидерборд</button>
         
-        <!-- Настройки -->
-        <div id="settings-tab">
+        <div id="settings-section">
             <label for="difficulty">Выбор сложности</label>
-            <select id="difficulty" style="width: 80%; padding: 10px; margin: 10px;">
+            <select id="difficulty">
                 <option value="easy">Легко (10x10)</option>
                 <option value="medium">Нормально (15x15)</option>
                 <option value="hard">Тяжело (20x20)</option>
             </select>
             
             <label for="ballColor">Выбор цвета</label>
-            <select id="ballColor" style="width: 80%; padding: 10px; margin: 10px;">
+            <select id="ballColor">
                 <option value="#FF0000">Красный</option>
                 <option value="#0000FF">Синий</option>
                 <option value="#00FF00">Зелёный</option>
             </select>
             
-            <button onclick="resetGameProgress()" style="width: 80%; padding: 10px; margin: 10px;">Сбросить игровой прогресс</button>
-            <button onclick="startGame()" style="width: 80%; padding: 10px; margin: 10px;">Начать игру</button>
+            <button onclick="resetGameProgress()">Сбросить игровой прогресс</button>
+            <button onclick="startGame()">Начать игру</button>
         </div>
         
-        <!-- Лидерборд -->
-        <div id="leaderboard-tab" style="display: none;">
+        <div id="leaderboard-section" style="display: none;">
             <h3>Таблица лидеров</h3>
-            <button onclick="loadLeaderboard()" style="width: 80%; padding: 10px;">Обновить</button>
-            <div id="leaderboard-list" style="margin-top: 20px; text-align: left; max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.1); padding: 10px;"></div>
+            <button onclick="loadLeaderboard()">Обновить</button>
+            <div id="leaderboard-list"></div>
         </div>
     </div>
 </div>
-    
-    <!-- Таб: Лидерборд -->
-    <div id="leaderboard-tab" class="tab-content" style="display: none;">
-        <h3>Таблица лидеров</h3>
-        <button onclick="loadLeaderboard()">Обновить</button>
-        <div id="leaderboard-list" style="margin-top: 20px; text-align: left; max-height: 300px; overflow-y: auto;"></div>
-    </div>
-</div>
-    
-    <!-- Таб: Лидерборд -->
-    <div id="leaderboard-tab" class="tab-content" style="display: none;">
-        <button onclick="loadLeaderboard()" style="width: 90%;">Обновить лидерборд</button>
-        <div id="leaderboard-list" style="margin-top: 20px; text-align: left;"></div>
-    </div>
-</div>
-        <div id="tutorial">
-            <h2>Обучение</h2>
-            <p id="tutorial-text"></p> <!-- Динамический текст для шагов обучения -->
-            <button onclick="nextTutorial()">Далее</button>
-        </div>
-    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script> <!-- p5.js для работы с холстом и рисования -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script> <!-- Howler.js для работы со звуком -->
     <script>
@@ -530,29 +518,18 @@ input, select { padding: 10px; margin: 10px; }
         }
 
         // Обработка победы в игре
-        function winGame() {
-            // Начисляет очки в зависимости от сложности
-            score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30;
-            if (winSound) {
-                if (winSound.state() === 'loaded') {
-                    winSound.play(); // Воспроизводит звук победы
-                    console.log('Звук победы воспроизводится');
-                } else {
-                    console.warn('Звук победы не загружен');
-                }
-            } else {
-                console.warn('Звук победы не инициализирован');
-            }
-            if (bgMusic) {
-                bgMusic.stop(); // Останавливает фоновую музыку
-                console.log('Фоновый звук остановлен');
-            }
-             // Сохраняет прогресс
-            gameState = 'menu';
-            document.getElementById('menu').style.display = 'block'; // Показывает меню
-            showTab('game-tab');  // Открываем настройки
-            loadLeaderboard();  // Обновляем лидерборд
-        }
+function winGame() {
+    gameState = 'menu';
+    noLoop(); // Останавливает рисование полностью (лабиринт исчезает)
+    score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30; // Начисляем очки
+    if (winSound && winSound.state() === 'loaded') winSound.play();
+    if (bgMusic) bgMusic.stop();
+    document.getElementById('menu').style.display = 'block';
+    updateAuthUI(); // Обновляем табы
+    loadLeaderboard();
+    saveGameOnWin(); // Сохраняем новые очки на сервер
+    noLoop(); // Останавливает рисование полностью — лабиринт исчезает
+}
 
         // Сбрасывает прогресс игрока
 
@@ -770,19 +747,25 @@ function logout() {
     showTab('login-tab');
 }
 
+function showGameTab(tab) {
+    document.getElementById('settings-section').style.display = 'none';
+    document.getElementById('leaderboard-section').style.display = 'none';
+    document.getElementById(tab + '-section').style.display = 'block';
+}
+
 // Обновление UI после авторизации
 function updateAuthUI() {
     if (currentUser) {
         document.getElementById('welcome-message').style.display = 'block';
         document.getElementById('username-display').textContent = currentUser;
-        document.getElementById('auth-tab').style.display = 'none';
-        document.getElementById('main-tabs').style.display = 'block';
-        showMainTab('settings');  // По умолчанию настройки
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('game-sections').style.display = 'block';
+        showGameTab('settings');
         loadLeaderboard();
     } else {
         document.getElementById('welcome-message').style.display = 'none';
-        document.getElementById('auth-tab').style.display = 'block';
-        document.getElementById('main-tabs').style.display = 'none';
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('game-sections').style.display = 'none';
     }
 }
 
@@ -857,10 +840,36 @@ async function saveGameOnWin() {
         console.log('Не удалось сохранить на сервер');
     }
 }
-function resetGameProgress() {
-    if (confirm('Сбросить очки и прогресс?')) {
-        score = 0;
-        alert('Прогресс сброшен!');
+async function resetGameProgress() {
+    if (!confirm('Полный сброс прогресса (очки = 0 на сервере и в лидерборде)?')) return;
+    
+    score = 0;
+    
+    if (accessToken) {
+        const sessionData = {
+            score: 0,
+            difficulty: difficulty,
+            time_played: 0,
+            is_completed: false,
+            game_state: {}
+        };
+        
+        try {
+            await fetch(`${API_URL}/game/session/save/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify(sessionData)
+            });
+            loadLeaderboard(); // Лидерборд обновится на 0
+            alert('Прогресс полностью сброшен (очки = 0 в лидерборде)!');
+        } catch (e) {
+            alert('Ошибка сброса на сервере');
+        }
+    } else {
+        alert('Прогресс сброшен локально');
     }
 }
     </script>
