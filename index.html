@@ -8,28 +8,33 @@
         /* Стилизация тела страницы для центрирования и заполнения окна */
         body {
             margin: 0;
+            padding: 0; 
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
+            width: 100vw; 
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
-            overflow: hidden; /* Запрещает прокрутку для чистого вида игры */
+            overflow: hidden;
         }
         /* Контейнер игры: содержит холст и интерфейс, адаптивный размер */
         #game-container {
             position: relative;
             width: 90vw;
             max-width: 600px;
-            aspect-ratio: 1; /* Сохраняет квадратную форму игрового поля */
+            height: 90vw;
+            max-height: 600px;
+            aspect-ratio: 1 / 1; /* Фикс для квадратной формы */
         }
         /* Стили холста: заполняет контейнер, добавляет рамку */
         canvas {
-            width: 100%;
-            height: 100%;
-            border: 2px solid #333;
-            border-radius: 10px;
+            width: 100% !important;
+            height: 100% !important;
+            border: 4px solid #333; /* Толще рамка для красоты */
+            border-radius: 15px; /* Больше скругление */
+            box-shadow: 0 0 30px rgba(0,0,0,0.4);
+            background-color: #000;
         }
         /* Интерфейс: отображает счет, время и т.д. поверх холста */
         #ui {
@@ -101,7 +106,13 @@
                 width: 90%; /* Полная ширина для удобства на мобильных устройств */
             }
         }
-        .tab-content { display: none; }
+        .tab-content {
+    display: none;  
+}
+#settings-tab, #leaderboard-tab { display: none; }
+#auth-tab { display: block; }
+button { padding: 10px; margin: 5px; width: 80%; background: #fff; color: #000; border: none; border-radius: 5px; cursor: pointer; }
+input, select { padding: 10px; margin: 10px; }
     </style>
 </head>
 <body onload="updateAuthUI(); loadLeaderboard();">
@@ -110,53 +121,70 @@
         <div id="menu">
     <h2>Игра Лабиринт</h2>
     
-    <!-- Табы -->
-    <div style="margin-bottom: 20px;">
-        <button onclick="showTab('login-tab')" id="login-tab-btn">Вход / Регистрация</button>
-        <button onclick="showTab('game-tab')" id="game-tab-btn">Настройки игры</button>
-        <button onclick="showTab('leaderboard-tab')" id="leaderboard-tab-btn">Лидерборд</button>
-    </div>
-    
-    <!-- Приветствие если авторизован -->
+    <!-- Приветствие (показывается только после входа) -->
     <div id="welcome-message" style="display: none; margin-bottom: 20px; font-weight: bold;">
         Привет, <span id="username-display"></span>! 
-        <button onclick="logout()" style="margin-left: 10px;">Выйти</button>
+        <button onclick="logout()">Выйти</button>
     </div>
     
-    <!-- Таб: Логин/Регистрация -->
-    <div id="login-tab" class="tab-content">
-        <div id="auth-forms">
-            <h3>Регистрация</h3>
-            <input type="text" id="reg-username" placeholder="Имя пользователя" style="width: 90%; margin: 10px;">
-            <input type="password" id="reg-password" placeholder="Пароль" style="width: 90%; margin: 10px;">
-            <button onclick="register()" style="width: 90%;">Зарегистрироваться</button>
+    <!-- Если не авторизован — только логин/регистрация -->
+    <div id="auth-tab">
+        <h3>Регистрация</h3>
+        <input type="text" id="reg-username" placeholder="Имя пользователя" style="width: 80%; padding: 10px; margin: 10px;">
+        <input type="password" id="reg-password" placeholder="Пароль" style="width: 80%; padding: 10px; margin: 10px;">
+        <button onclick="register()" style="width: 80%; padding: 10px;">Зарегистрироваться</button>
+        
+        <h3 style="margin-top: 30px;">Вход</h3>
+        <input type="text" id="login-username" placeholder="Имя пользователя" style="width: 80%; padding: 10px; margin: 10px;">
+        <input type="password" id="login-password" placeholder="Пароль" style="width: 80%; padding: 10px; margin: 10px;">
+        <button onclick="login()" style="width: 80%; padding: 10px;">Войти</button>
+        
+        <p id="auth-message" style="color: red; margin-top: 20px;"></p>
+    </div>
+    
+    <!-- После входа — табы -->
+    <div id="main-tabs" style="display: none;">
+        <div style="margin-bottom: 20px;">
+            <button onclick="showMainTab('settings')" id="settings-btn">Настройки</button>
+            <button onclick="showMainTab('leaderboard')" id="leaderboard-btn">Лидерборд</button>
+        </div>
+        
+        <!-- Настройки -->
+        <div id="settings-tab">
+            <label for="difficulty">Выбор сложности</label>
+            <select id="difficulty" style="width: 80%; padding: 10px; margin: 10px;">
+                <option value="easy">Легко (10x10)</option>
+                <option value="medium">Нормально (15x15)</option>
+                <option value="hard">Тяжело (20x20)</option>
+            </select>
             
-            <h3 style="margin-top: 20px;">Вход</h3>
-            <input type="text" id="login-username" placeholder="Имя пользователя" style="width: 90%; margin: 10px;">
-            <input type="password" id="login-password" placeholder="Пароль" style="width: 90%; margin: 10px;">
-            <button onclick="login()" style="width: 90%;">Войти</button>
+            <label for="ballColor">Выбор цвета</label>
+            <select id="ballColor" style="width: 80%; padding: 10px; margin: 10px;">
+                <option value="#FF0000">Красный</option>
+                <option value="#0000FF">Синий</option>
+                <option value="#00FF00">Зелёный</option>
+            </select>
             
-            <p id="auth-message" style="color: red;"></p>
+            <button onclick="resetGameProgress()" style="width: 80%; padding: 10px; margin: 10px;">Сбросить игровой прогресс</button>
+            <button onclick="startGame()" style="width: 80%; padding: 10px; margin: 10px;">Начать игру</button>
+        </div>
+        
+        <!-- Лидерборд -->
+        <div id="leaderboard-tab" style="display: none;">
+            <h3>Таблица лидеров</h3>
+            <button onclick="loadLeaderboard()" style="width: 80%; padding: 10px;">Обновить</button>
+            <div id="leaderboard-list" style="margin-top: 20px; text-align: left; max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.1); padding: 10px;"></div>
         </div>
     </div>
+</div>
     
-    <!-- Таб: Настройки игры -->
-    <div id="game-tab" class="tab-content" style="display: none;">
-        <label for="difficulty">Выбор сложности</label>
-        <select id="difficulty">
-            <option value="easy">Легко (10x10)</option>
-            <option value="medium">Нормально (15x15)</option>
-            <option value="hard">Тяжело (20x20)</option>
-        </select>
-        <label for="ballColor">Выбор цвета</label>
-        <select id="ballColor">
-            <option value="#FF0000">Красный</option>
-            <option value="#0000FF">Синий</option>
-            <option value="#00FF00">Зеленый</option>
-        </select>
-        <button onclick="localStorage.clear(); location.reload();">Сбросить прогресс</button>
-        <button onclick="startGame()">Начать игру</button>
+    <!-- Таб: Лидерборд -->
+    <div id="leaderboard-tab" class="tab-content" style="display: none;">
+        <h3>Таблица лидеров</h3>
+        <button onclick="loadLeaderboard()">Обновить</button>
+        <div id="leaderboard-list" style="margin-top: 20px; text-align: left; max-height: 300px; overflow-y: auto;"></div>
     </div>
+</div>
     
     <!-- Таб: Лидерборд -->
     <div id="leaderboard-tab" class="tab-content" style="display: none;">
@@ -668,9 +696,10 @@
         loadLeaderboard();  // Чтобы лидерборд сразу показывался, если открыт таб
 
         // Показ таба
-    function showTab(tabId) {
-    document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-    document.getElementById(tabId).style.display = 'block';
+    function showMainTab(tab) {
+    document.getElementById('settings-tab').style.display = 'none';
+    document.getElementById('leaderboard-tab').style.display = 'none';
+    document.getElementById(tab + '-tab').style.display = 'block';
     
     // Подсветка кнопок
     document.querySelectorAll('#menu button').forEach(btn => btn.style.fontWeight = 'normal');
@@ -746,13 +775,14 @@ function updateAuthUI() {
     if (currentUser) {
         document.getElementById('welcome-message').style.display = 'block';
         document.getElementById('username-display').textContent = currentUser;
-        document.getElementById('auth-forms').style.display = 'none';
-        showTab('game-tab'); // Авто-переход к настройкам
-        loadLeaderboard(); // Обновляем лидерборд
+        document.getElementById('auth-tab').style.display = 'none';
+        document.getElementById('main-tabs').style.display = 'block';
+        showMainTab('settings');  // По умолчанию настройки
+        loadLeaderboard();
     } else {
         document.getElementById('welcome-message').style.display = 'none';
-        document.getElementById('auth-forms').style.display = 'block';
-        showTab('login-tab');
+        document.getElementById('auth-tab').style.display = 'block';
+        document.getElementById('main-tabs').style.display = 'none';
     }
 }
 
@@ -825,6 +855,12 @@ async function saveGameOnWin() {
         loadLeaderboard(); // Обновляем лидерборд
     } catch (e) {
         console.log('Не удалось сохранить на сервер');
+    }
+}
+function resetGameProgress() {
+    if (confirm('Сбросить очки и прогресс?')) {
+        score = 0;
+        alert('Прогресс сброшен!');
     }
 }
     </script>
