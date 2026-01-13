@@ -50,7 +50,7 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.9); /* Чёрный непрозрачный фон */
+    background-color: rgba(0, 0, 0, 0.95); /* Непрозрачный чёрный фон */
     padding: 40px;
     border-radius: 20px;
     color: white;
@@ -159,6 +159,7 @@ input, select { padding: 10px; margin: 10px; }
     <div id="game-sections" style="display: none;">
         <button onclick="showGameTab('settings')">Настройки игры</button>
         <button onclick="showGameTab('leaderboard')">Лидерборд</button>
+        <button onclick="startGame()" style="width: 100%; padding: 15px; margin: 20px 0; font-size: 20px; background: #4CAF50; color: white;">Начать игру</button>
         
         <div id="settings-section">
             <label for="difficulty">Выбор сложности</label>
@@ -176,7 +177,6 @@ input, select { padding: 10px; margin: 10px; }
             </select>
             
             <button onclick="resetGameProgress()">Сбросить игровой прогресс</button>
-            <button onclick="startGame()">Начать игру</button>
         </div>
         
         <div id="leaderboard-section" style="display: none;">
@@ -529,11 +529,8 @@ function winGame() {
     loadLeaderboard();
     saveGameOnWin(); // Сохраняем новые очки на сервер
     noLoop(); // Останавливает рисование полностью — лабиринт исчезает
-}
-
-        // Сбрасывает прогресс игрока
-
-
+    background(0); // Очищает холст чёрным
+    }
         // Запускает игру
         function startGame() {
             // Воспроизведение звука начала игры
@@ -616,8 +613,8 @@ function winGame() {
             document.getElementById('menu').style.display = 'none';
 
             gameState = 'playing';  // Запускает рисование лабиринта в draw()
-            loop();  // Возобновляет цикл p5.js (на всякий случай, если tutorial остановил)
-       
+            loop(); // Возобновляет рисование при новой игре
+            background(0); // Очищает перед новой игрой
         }
 
         // Показывает шаги обучения
@@ -751,6 +748,10 @@ function showGameTab(tab) {
     document.getElementById('settings-section').style.display = 'none';
     document.getElementById('leaderboard-section').style.display = 'none';
     document.getElementById(tab + '-section').style.display = 'block';
+    
+    if (tab === 'leaderboard') {
+        loadLeaderboard();
+    }
 }
 
 // Обновление UI после авторизации
@@ -776,17 +777,19 @@ function showAuthMessage(msg) {
 
 // Загрузка лидерборда
 async function loadLeaderboard() {
+    document.getElementById('leaderboard-list').innerHTML = 'Загрузка...';
     try {
         const response = await fetch(`${API_URL}/game/leaderboard/`);
         const data = await response.json();
         const list = document.getElementById('leaderboard-list');
-        list.innerHTML = '<ol>';
-        data.forEach((entry, i) => {
+        list.innerHTML = '<ol style="text-align: left;">';
+        data.forEach(entry => {
             list.innerHTML += `<li>${entry.username} — ${entry.score} очков (ранг ${entry.rank})</li>`;
         });
         list.innerHTML += '</ol>';
+        if (data.length === 0) list.innerHTML = 'Лидерборд пуст';
     } catch (e) {
-        document.getElementById('leaderboard-list').innerHTML = 'Не удалось загрузить лидерборд';
+        document.getElementById('leaderboard-list').innerHTML = 'Ошибка загрузки лидерборда';
     }
 }
 
@@ -804,7 +807,9 @@ async function loadLastSave() {
             const data = await response.json();
             if (data.score !== undefined) {
                 score = data.score || 0;
-                document.getElementById('difficulty').value = data.difficulty || 'easy';
+                if (data.difficulty) {
+                document.getElementById('difficulty').value = data.difficulty;
+                }
             }
         } else if (response.status === 401) {
             console.log('Токен недействителен — перелогиньтесь');
@@ -850,7 +855,7 @@ async function resetGameProgress() {
             score: 0,
             difficulty: difficulty,
             time_played: 0,
-            is_completed: false,
+            is_completed: true, // Важно: true, чтобы backend взял 0 в max(score)
             game_state: {}
         };
         
@@ -863,7 +868,7 @@ async function resetGameProgress() {
                 },
                 body: JSON.stringify(sessionData)
             });
-            loadLeaderboard(); // Лидерборд обновится на 0
+            loadLeaderboard(); // Обновляем лидерборд сразу
             alert('Прогресс полностью сброшен (очки = 0 в лидерборде)!');
         } catch (e) {
             alert('Ошибка сброса на сервере');
