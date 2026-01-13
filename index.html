@@ -154,7 +154,7 @@
             <option value="#0000FF">Синий</option>
             <option value="#00FF00">Зеленый</option>
         </select>
-        <button onclick="resetProgress()">Сбросить прогресс</button>
+        <button onclick="localStorage.clear(); location.reload();">Сбросить прогресс</button>
         <button onclick="startGame()">Начать игру</button>
     </div>
     
@@ -238,7 +238,7 @@
             gameState = 'menu'; // Начинает в режиме меню
             score = 0; // Инициализирует счет
             timer = 0; // Инициализирует таймер
-            loadProgress(); // Загружает сохраненный прогресс
+            // Загружает сохраненный прогресс
             document.getElementById('menu').style.display = 'block'; // Показывает меню
             // Обработчик изменения цвета шарика
             document.getElementById('ballColor').addEventListener('change', () => {
@@ -497,13 +497,12 @@
                 } else {
                     console.warn('Звук пасхального яйца не инициализирован');
                 }
-                saveProgress(); // Сохраняет прогресс
+                 // Сохраняет прогресс
             }
         }
 
         // Обработка победы в игре
         function winGame() {
-            gameState = 'menu'; // Возвращает в меню
             // Начисляет очки в зависимости от сложности
             score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30;
             if (winSound) {
@@ -520,27 +519,15 @@
                 bgMusic.stop(); // Останавливает фоновую музыку
                 console.log('Фоновый звук остановлен');
             }
-            saveProgress(); // Сохраняет прогресс
+             // Сохраняет прогресс
+            gameState = 'menu';
             document.getElementById('menu').style.display = 'block'; // Показывает меню
-
-            document.getElementById('menu').style.display = 'block';  // Показываем меню снова
             showTab('game-tab');  // Открываем настройки
             loadLeaderboard();  // Обновляем лидерборд
         }
 
         // Сбрасывает прогресс игрока
-        function resetProgress() {
-            score = 0; // Обнуляет счет
-            localStorage.removeItem('score'); // Удаляет сохраненный счет
-            localStorage.removeItem('playerName'); // Удаляет имя
-            localStorage.removeItem('difficulty'); // Удаляет сложность
-            localStorage.removeItem('tutorialCompleted'); // Сбрасывает обучение
-            playerName = 'Игрок'; // Устанавливает имя по умолчанию
-            difficulty = 'easy'; // Устанавливает сложность по умолчанию
-            document.getElementById('playerName').value = playerName; // Обновляет поле имени
-            document.getElementById('difficulty').value = difficulty; // Обновляет поле сложности
-            updateUI(); // Обновляет интерфейс
-        }
+
 
         // Запускает игру
         function startGame() {
@@ -611,7 +598,7 @@
                 } else {
                     console.warn('Фоновый звук не инициализирован');
                 }
-                saveProgress(); // Сохраняет прогресс
+                 // Сохраняет прогресс
             }
 
                 updateAuthUI();  // На всякий случай обновляем UI
@@ -662,20 +649,10 @@
         }
 
         // Сохраняет прогресс в localStorage
-        function saveProgress() {
-            localStorage.setItem('score', score); // Сохраняет счет
-            localStorage.setItem('playerName', playerName); // Сохраняет имя
-            localStorage.setItem('difficulty', difficulty); // Сохраняет сложность
-        }
+
 
         // Загружает сохраненный прогресс
-        function loadProgress() {
-            score = parseInt(localStorage.getItem('score')) || 0; // Загружает счет или 0
-            playerName = localStorage.getItem('playerName') || 'Игрок'; // Загружает имя или значение по умолчанию
-            difficulty = localStorage.getItem('difficulty') || 'easy'; // Загружает сложность или значение по умолчанию
-            document.getElementById('playerName').value = playerName; // Устанавливает имя в поле
-            document.getElementById('difficulty').value = difficulty; // Устанавливает сложность в поле
-        }
+
 
         // Обрабатывает нажатие клавиш
         function keyPressed() {
@@ -802,7 +779,10 @@ async function loadLeaderboard() {
 
 // Загрузка последнего сохранения
 async function loadLastSave() {
-    if (!accessToken) return;
+    if (!accessToken) {
+        console.log('Не авторизован — пропускаем загрузку сохранения');
+        return;
+    }
     try {
         const response = await fetch(`${API_URL}/game/session/load/`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -813,9 +793,11 @@ async function loadLastSave() {
                 score = data.score || 0;
                 document.getElementById('difficulty').value = data.difficulty || 'easy';
             }
+        } else if (response.status === 401) {
+            console.log('Токен недействителен — перелогиньтесь');
         }
     } catch (e) {
-        console.log('Не удалось загрузить сохранение');
+        console.log('Ошибка сети при загрузке сохранения');
     }
 }
 
