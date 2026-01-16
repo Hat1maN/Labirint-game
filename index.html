@@ -50,15 +50,19 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.95); /* Непрозрачный чёрный фон */
-    padding: 40px;
-    border-radius: 20px;
+    background-color: #000000; /* Полностью чёрный, без прозрачности */
+    padding: 60px; /* Увеличили отступы — меню стало больше */
+    border-radius: 30px;
     color: white;
     text-align: center;
-    width: 80%;
-    max-width: 500px;
-    z-index: 100; /* На передний план */
-    box-shadow: 0 0 40px rgba(0,0,0,0.8); /* Тень для объёма */
+    width: 85%;
+    max-width: 600px;
+    min-height: 70vh; /* Минимальная высота — меню занимает больше экрана */
+    z-index: 100;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
         /* Стили для полей ввода, выбора и кнопок в меню */
 #menu button, #menu input, #menu select {
@@ -160,11 +164,11 @@ input, select { padding: 10px; margin: 10px; }
     </div>
     
     <!-- Главное игровое меню (после входа или гостя) -->
-    <div id="main-game-menu" style="display: none;">
-        <div id="welcome-message" style="margin-bottom: 20px; font-weight: bold;">
-            Привет, <span id="username-display">Гость</span>!
-            <button onclick="logout()" id="logout-btn" style="display: none;">Выйти</button>
-        </div>
+<div id="welcome-message" style="margin-bottom: 30px; font-weight: bold; font-size: 24px;">
+    Привет, <span id="username-display"></span>!
+    <button onclick="changeAccount()" style="margin-left: 10px; font-size: 16px;">Сменить аккаунт</button>
+    <button onclick="logout()" style="margin-left: 10px; font-size: 16px;">Выйти</button>
+</div>
         
         <button onclick="showSettings()">Настройки</button>
         <button onclick="showLeaderboard()">Лидерборд</button>
@@ -535,17 +539,16 @@ input, select { padding: 10px; margin: 10px; }
         // Обработка победы в игре
 function winGame() {
     gameState = 'menu';
-    noLoop(); // Останавливает рисование полностью (лабиринт исчезает)
-    score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30; // Начисляем очки
+    noLoop(); // Останавливает рисование полностью
+    background(0); // Очищает canvas чёрным (лабиринт исчезает навсегда)
+    score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30;
     if (winSound && winSound.state() === 'loaded') winSound.play();
     if (bgMusic) bgMusic.stop();
     document.getElementById('menu').style.display = 'block';
-    updateAuthUI(); // Обновляем табы
+    updateAuthUI(); // Обновляем меню
     loadLeaderboard();
-    saveGameOnWin(); // Сохраняем новые очки на сервер
-    noLoop(); // Останавливает рисование полностью — лабиринт исчезает
-    background(0); // Очищает холст чёрным
-    }
+    saveGameOnWin();
+}
         // Запускает игру
         function startGame() {
             // Воспроизведение звука начала игры
@@ -771,18 +774,7 @@ function showGameTab(tab) {
 
 // Обновление UI после авторизации
 function updateAuthUI() {
-    if (currentUser) {
-        document.getElementById('welcome-message').style.display = 'block';
-        document.getElementById('username-display').textContent = currentUser;
-        document.getElementById('auth-section').style.display = 'none';
-        document.getElementById('game-sections').style.display = 'block';
-        showGameTab('settings');
-        loadLeaderboard();
-    } else {
-        document.getElementById('welcome-message').style.display = 'none';
-        document.getElementById('auth-section').style.display = 'block';
-        document.getElementById('game-sections').style.display = 'none';
-    }
+    showMainGameMenu();
 }
 
 // Сообщения об ошибках
@@ -958,6 +950,16 @@ function logout() {
     document.getElementById('start-menu').style.display = 'block';
 }
 
+function changeAccount() {
+    if (confirm('Сменить аккаунт? Вы вернётесь в стартовое меню.')) {
+        accessToken = null;
+        currentUser = null;
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('currentUser');
+        document.getElementById('main-game-menu').style.display = 'none';
+        document.getElementById('start-menu').style.display = 'block'; // Возврат в стартовое меню
+    }
+}
     </script>
 </body>
 </html>
