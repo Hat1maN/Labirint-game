@@ -709,12 +709,6 @@ function winGame() {
     noLoop();  // Останавливаем рисование игры
 }
 
-function showMenuFromGame() {
-    document.getElementById('menu').style.display = 'block';
-    document.getElementById('main-game-menu').style.display = 'block';
-    updateContinueButtonVisibility();
-}
-
         // Показывает шаги обучения
         function showTutorial() {
             let text = document.getElementById('tutorial-text');
@@ -746,22 +740,6 @@ function showMenuFromGame() {
         function nextTutorial() {
             tutorialStep++; // Увеличивает шаг
             showTutorial(); // Показывает следующий текст
-        }
-
-        // Сохраняет прогресс в localStorage
-
-
-        // Загружает сохраненный прогресс
-
-
-        // Обрабатывает нажатие клавиш
-        function keyPressed() {
-            keys[key] = true; // Отмечает клавишу как нажатую
-        }
-
-        // Обрабатывает отпускание клавиш
-        function keyReleased() {
-            keys[key] = false; // Сбрасывает состояние клавиши
         }
 
         updateAuthUI();
@@ -1110,23 +1088,48 @@ function updateContinueButtonVisibility() {
 }
 
 function keyPressed() {
-    if (keyCode === 27) {  // 27 = код клавиши Escape
-        keyCode = 0;       // Отключаем стандартное поведение p5.js
-        if (gameState === 'playing') {
-            pauseAndSaveGame();
-            showMenuFromGame();
-        }
-        return false;      // Блокируем дальнейшую обработку
+    // Не блокируем клавиатуру в меню/регистрации — ввод в <input> работает
+    if (gameState !== 'playing') {
+        return;  // Полностью пропускаем обработку
     }
-    keys[key] = true;
-    return false;  // Предотвращаем прокрутку страницы стрелками
+
+    // Esc для паузы
+    if (keyCode === 27) {  // Escape
+        keyCode = 0;  // Отключаем стандартное поведение p5.js
+        pauseAndSaveGame();
+        showMenuFromGame();
+        return false;  // Блокируем только Esc
+    }
+
+    // Регистрируем клавиши в lowercase для WASD
+    const lowerKey = key.toLowerCase();
+    keys[lowerKey] = true;
+
+    // Дополнительно для стрелок (если ваш код в draw() использует keyCode)
+    if (keyCode === LEFT_ARROW) keys['a'] = true;
+    if (keyCode === RIGHT_ARROW) keys['d'] = true;
+    if (keyCode === UP_ARROW) keys['w'] = true;
+    if (keyCode === DOWN_ARROW) keys['s'] = true;
+
+    // Блокируем скролл страницы только для игровых клавиш
+    if ([32, 37, 38, 39, 40].includes(keyCode) || ['w', 'a', 's', 'd'].includes(lowerKey)) {
+        return false;
+    }
 }
 
 function keyReleased() {
-    keys[key] = false;
-    if (keyCode === 27) {
-        return false;
+    if (gameState !== 'playing') {
+        return;
     }
+
+    const lowerKey = key.toLowerCase();
+    keys[lowerKey] = false;
+
+    // Для стрелок
+    if (keyCode === LEFT_ARROW) keys['a'] = false;
+    if (keyCode === RIGHT_ARROW) keys['d'] = false;
+    if (keyCode === UP_ARROW) keys['w'] = false;
+    if (keyCode === DOWN_ARROW) keys['s'] = false;
 }
 
 function pauseAndSaveGame() {
