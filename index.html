@@ -51,13 +51,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     background-color: #000000; /* Полностью чёрный, без прозрачности */
-    padding: 60px; /* Увеличили отступы — меню стало больше */
+    padding: 60px; /* Больше отступов — меню стало выше и шире */
     border-radius: 30px;
     color: white;
     text-align: center;
     width: 85%;
     max-width: 600px;
-    min-height: 70vh; /* Минимальная высота — меню занимает больше экрана */
+    min-height: 80vh; /* Занимает больше экрана по высоте */
     z-index: 100;
     box-shadow: 0 0 60px rgba(0,0,0,0.9);
     display: flex;
@@ -80,6 +80,9 @@
     margin-bottom: 30px;
     font-size: 32px;
 }
+
+#main-game-menu { display: none; }
+
         /* Метки в меню: жирные и с отступом для ясности */
         #menu label {
             display: block;
@@ -164,17 +167,20 @@ input, select { padding: 10px; margin: 10px; }
     </div>
     
     <!-- Главное игровое меню (после входа или гостя) -->
-<div id="welcome-message" style="margin-bottom: 30px; font-weight: bold; font-size: 24px;">
-    Привет, <span id="username-display"></span>!
-    <button onclick="changeAccount()" style="margin-left: 10px; font-size: 16px;">Сменить аккаунт</button>
-    <button onclick="logout()" style="margin-left: 10px; font-size: 16px;">Выйти</button>
-</div>
-        
-        <button onclick="showSettings()">Настройки</button>
-        <button onclick="showLeaderboard()">Лидерборд</button>
-        <button onclick="continueGame()">Продолжить игру</button>
-        <button onclick="startNewGame()">Начать новую игру</button>
+<div id="main-game-menu" style="display: none;">
+    <div id="welcome-message" style="margin-bottom: 30px; font-weight: bold; font-size: 24px;">
+        Привет, <span id="username-display"></span>!
+        <div style="margin-top: 10px;">
+            <button onclick="changeAccount()">Сменить аккаунт</button>
+            <button onclick="logout()">Выйти</button>
+        </div>
     </div>
+        
+    <button onclick="showSettings()">Настройки</button>
+    <button onclick="showLeaderboard()">Лидерборд</button>
+    <button onclick="continueGame()">Продолжить игру</button>
+    <button onclick="startNewGame()">Начать новую игру</button>
+</div>
     
     <!-- Панель настроек -->
     <div id="settings-panel" style="display: none;">
@@ -194,7 +200,7 @@ input, select { padding: 10px; margin: 10px; }
         </select>
         
         <button onclick="resetGameProgress()">Сбросить прогресс</button>
-        <button onclick="backToMainMenu()">Назад</button>
+        <button onclick="backToMainMenu()" style="width: 100%; padding: 15px; margin-top: 20px;">Назад</button>
     </div>
     
     <!-- Панель лидерборда -->
@@ -202,7 +208,7 @@ input, select { padding: 10px; margin: 10px; }
         <h3>Таблица лидеров</h3>
         <button onclick="loadLeaderboard()">Обновить</button>
         <div id="leaderboard-list" style="margin-top: 20px;"></div>
-        <button onclick="backToMainMenu()">Назад</button>
+        <button onclick="backToMainMenu()" style="width: 100%; padding: 15px; margin-top: 20px;">Назад</button>
     </div>
 </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script> <!-- p5.js для работы с холстом и рисования -->
@@ -540,7 +546,6 @@ input, select { padding: 10px; margin: 10px; }
 function winGame() {
     gameState = 'menu';
     noLoop(); // Останавливает рисование полностью
-    background(0); // Очищает canvas чёрным (лабиринт исчезает навсегда)
     score += difficulty === 'easy' ? 10 : difficulty === 'medium' ? 20 : 30;
     if (winSound && winSound.state() === 'loaded') winSound.play();
     if (bgMusic) bgMusic.stop();
@@ -548,10 +553,12 @@ function winGame() {
     updateAuthUI(); // Обновляем меню
     loadLeaderboard();
     saveGameOnWin();
+    background(0); // Очищает canvas
 }
         // Запускает игру
         function startGame() {
-            // Воспроизведение звука начала игры
+            gameWon = false;  // Явно сбрасываем флаг победы
+            gameState = 'playing';  // Принудительно в режим игры
             if (startSound) {
                 if (startSound.state() === 'loaded') {
                     startSound.play();
@@ -775,6 +782,7 @@ function showGameTab(tab) {
 // Обновление UI после авторизации
 function updateAuthUI() {
     showMainGameMenu();
+    loadLeaderboard();
 }
 
 // Сообщения об ошибках
@@ -903,13 +911,13 @@ function playAsGuest() {
 }
 
 function showMainGameMenu() {
+    if (!accessToken) {
+    document.querySelector('#main-game-menu button[onclick="continueGame()"]').style.display = 'none';
+    }
     document.getElementById('start-menu').style.display = 'none';
     document.getElementById('auth-panel').style.display = 'none';
     document.getElementById('main-game-menu').style.display = 'block';
     document.getElementById('username-display').textContent = currentUser || 'Гость';
-    if (accessToken) {
-        document.getElementById('logout-btn').style.display = 'inline-block';
-    }
     loadLeaderboard();
 }
 
@@ -927,18 +935,18 @@ function showSettings() {
 function showLeaderboard() {
     document.getElementById('main-game-menu').style.display = 'none';
     document.getElementById('leaderboard-panel').style.display = 'block';
-    loadLeaderboard();
+    loadLeaderboard(); // Автоматически обновляем лидерборд при открытии
 }
 
 function startNewGame() {
-    startGame(); // Твоя функция запуска игры
+    startGame(); // Просто запускаем новую игру
 }
 
-function continueGame() {
+async function continueGame() {
     if (accessToken) {
-        loadLastSave(); // Подгружаем сохранение
+        await loadLastSave(); // Подгружаем сохранение
     }
-    startGame(); // Запускаем игру (если нет сохранения — новая)
+    startGame(); // Запускаем игру полностью (лабиринт генерируется, loop() работает)
 }
 
 function logout() {
@@ -957,7 +965,7 @@ function changeAccount() {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('currentUser');
         document.getElementById('main-game-menu').style.display = 'none';
-        document.getElementById('start-menu').style.display = 'block'; // Возврат в стартовое меню
+        document.getElementById('start-menu').style.display = 'block';
     }
 }
     </script>
