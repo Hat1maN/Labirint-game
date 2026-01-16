@@ -137,12 +137,14 @@ input, select { padding: 10px; margin: 10px; }
 <div id="menu">
     <h2>Игра Лабиринт</h2>
     
-    <div id="welcome-message" style="display: none; margin-bottom: 20px; font-weight: bold;">
-        Привет, <span id="username-display"></span>!
-        <button onclick="logout()">Выйти</button>
+    <!-- Стартовое меню (только при первом запуске или после выхода) -->
+    <div id="start-menu">
+        <button onclick="showAuth()">Вход / Регистрация</button>
+        <button onclick="playAsGuest()">Играть как гость</button>
     </div>
     
-    <div id="auth-section">
+    <!-- Панель авторизации (показывается по кнопке) -->
+    <div id="auth-panel" style="display: none;">
         <h3>Регистрация</h3>
         <input type="text" id="reg-username" placeholder="Имя пользователя">
         <input type="password" id="reg-password" placeholder="Пароль">
@@ -154,36 +156,49 @@ input, select { padding: 10px; margin: 10px; }
         <button onclick="login()">Войти</button>
         
         <p id="auth-message" style="color: red;"></p>
+        <button onclick="backToStart()">Назад</button>
     </div>
     
-    <div id="game-sections" style="display: none;">
-        <button onclick="showGameTab('settings')">Настройки игры</button>
-        <button onclick="showGameTab('leaderboard')">Лидерборд</button>
-        <button onclick="startGame()" style="width: 100%; padding: 15px; margin: 20px 0; font-size: 20px; background: #4CAF50; color: white;">Начать игру</button>
-        
-        <div id="settings-section">
-            <label for="difficulty">Выбор сложности</label>
-            <select id="difficulty">
-                <option value="easy">Легко (10x10)</option>
-                <option value="medium">Нормально (15x15)</option>
-                <option value="hard">Тяжело (20x20)</option>
-            </select>
-            
-            <label for="ballColor">Выбор цвета</label>
-            <select id="ballColor">
-                <option value="#FF0000">Красный</option>
-                <option value="#0000FF">Синий</option>
-                <option value="#00FF00">Зелёный</option>
-            </select>
-            
-            <button onclick="resetGameProgress()">Сбросить игровой прогресс</button>
+    <!-- Главное игровое меню (после входа или гостя) -->
+    <div id="main-game-menu" style="display: none;">
+        <div id="welcome-message" style="margin-bottom: 20px; font-weight: bold;">
+            Привет, <span id="username-display">Гость</span>!
+            <button onclick="logout()" id="logout-btn" style="display: none;">Выйти</button>
         </div>
         
-        <div id="leaderboard-section" style="display: none;">
-            <h3>Таблица лидеров</h3>
-            <button onclick="loadLeaderboard()">Обновить</button>
-            <div id="leaderboard-list"></div>
-        </div>
+        <button onclick="showSettings()">Настройки</button>
+        <button onclick="showLeaderboard()">Лидерборд</button>
+        <button onclick="continueGame()">Продолжить игру</button>
+        <button onclick="startNewGame()">Начать новую игру</button>
+    </div>
+    
+    <!-- Панель настроек -->
+    <div id="settings-panel" style="display: none;">
+        <h3>Настройки</h3>
+        <label>Сложность</label>
+        <select id="difficulty">
+            <option value="easy">Легко (10x10)</option>
+            <option value="medium">Нормально (15x15)</option>
+            <option value="hard">Тяжело (20x20)</option>
+        </select>
+        
+        <label>Цвет шарика</label>
+        <select id="ballColor">
+            <option value="#FF0000">Красный</option>
+            <option value="#0000FF">Синий</option>
+            <option value="#00FF00">Зелёный</option>
+        </select>
+        
+        <button onclick="resetGameProgress()">Сбросить прогресс</button>
+        <button onclick="backToMainMenu()">Назад</button>
+    </div>
+    
+    <!-- Панель лидерборда -->
+    <div id="leaderboard-panel" style="display: none;">
+        <h3>Таблица лидеров</h3>
+        <button onclick="loadLeaderboard()">Обновить</button>
+        <div id="leaderboard-list" style="margin-top: 20px;"></div>
+        <button onclick="backToMainMenu()">Назад</button>
     </div>
 </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script> <!-- p5.js для работы с холстом и рисования -->
@@ -877,6 +892,72 @@ async function resetGameProgress() {
         alert('Прогресс сброшен локально');
     }
 }
+
+function showAuth() {
+    document.getElementById('start-menu').style.display = 'none';
+    document.getElementById('auth-panel').style.display = 'block';
+}
+
+function backToStart() {
+    document.getElementById('auth-panel').style.display = 'none';
+    document.getElementById('start-menu').style.display = 'block';
+}
+
+function playAsGuest() {
+    currentUser = 'Гость';
+    accessToken = null;
+    localStorage.setItem('currentUser', currentUser);
+    showMainGameMenu();
+}
+
+function showMainGameMenu() {
+    document.getElementById('start-menu').style.display = 'none';
+    document.getElementById('auth-panel').style.display = 'none';
+    document.getElementById('main-game-menu').style.display = 'block';
+    document.getElementById('username-display').textContent = currentUser || 'Гость';
+    if (accessToken) {
+        document.getElementById('logout-btn').style.display = 'inline-block';
+    }
+    loadLeaderboard();
+}
+
+function backToMainMenu() {
+    document.getElementById('settings-panel').style.display = 'none';
+    document.getElementById('leaderboard-panel').style.display = 'none';
+    document.getElementById('main-game-menu').style.display = 'block';
+}
+
+function showSettings() {
+    document.getElementById('main-game-menu').style.display = 'none';
+    document.getElementById('settings-panel').style.display = 'block';
+}
+
+function showLeaderboard() {
+    document.getElementById('main-game-menu').style.display = 'none';
+    document.getElementById('leaderboard-panel').style.display = 'block';
+    loadLeaderboard();
+}
+
+function startNewGame() {
+    startGame(); // Твоя функция запуска игры
+}
+
+function continueGame() {
+    if (accessToken) {
+        loadLastSave(); // Подгружаем сохранение
+    }
+    startGame(); // Запускаем игру (если нет сохранения — новая)
+}
+
+function logout() {
+    accessToken = null;
+    currentUser = null;
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('currentUser');
+    document.getElementById('main-game-menu').style.display = 'none';
+    document.getElementById('start-menu').style.display = 'block';
+}
+
     </script>
 </body>
 </html>
