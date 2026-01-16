@@ -227,6 +227,8 @@ input, select { padding: 10px; margin: 10px; }
         let frameCount = 0; // Счетчик кадров для расчета FPS
         let lastFpsTime = 0; // Метка времени для обновления FPS
         let fps = 0; // Кадры в секунду для отображения
+        let hasActiveSave = false; // Флаг: есть ли сохранённая незавершённая игра
+        let savedState = null; // Для хранения состояния локально (для гостей)
         let keys = {}; // Отслеживает нажатые клавиши
         let velocity = { x: 0, y: 0 }; // Скорость движения игрока
         let mouseControl = { active: false, targetX: 0, targetY: 0 }; // Состояние управления мышью
@@ -285,7 +287,17 @@ input, select { padding: 10px; margin: 10px; }
             document.getElementById('ballColor').addEventListener('change', () => {
                 if (player) player.color = document.getElementById('ballColor').value;
             });
+
+            function keyPressed() {
+            keys[key] = true;
+            if (keyCode === ESCAPE && gameState === 'playing') {
+                pauseAndSaveGame();  // Новая функция, которую добавим ниже
+                showMenuFromGame();
+                updateContinueButtonVisibility();  // Показываем кнопку
+                }
+            }
             loadSounds(); // Загружает звуки
+            updateContinueButtonVisibility();
         }
 
         // Адаптация холста при изменении размера окна
@@ -515,13 +527,18 @@ input, select { padding: 10px; margin: 10px; }
         }
 
         // Проверяет условие победы
-        function checkWinCondition() {
-            if (dist(player.x, player.y, goal.x, goal.y) < 0.3 && !gameWon) {
-                gameWon = true;  // Устанавливаем флаг
-                winGame(); // Завершает игру
-                saveGameOnWin();  // Добавь эту строку здесь — сохраняем на сервер только при победе
-            }
-        }
+function checkWinCondition() {
+    if (dist(player.x, player.y, goal.x, goal.y) < 0.3 && !gameWon) {
+        gameWon = true;  // Устанавливаем флаг победы
+        winGame();  
+        saveGameOnWin();  
+        pauseAndSaveGame();  // Это сохранит состояние, но мы сразу отметим, что продолжения нет
+        hasActiveSave = false;
+        localStorage.removeItem('savedGameState');  // Очищаем локальное сохранение (для гостей тоже)
+        updateContinueButtonVisibility();  // Скрываем кнопку "Продолжить игру"
+        showMenuFromGame();
+    }
+}
 
         // Проверяет нахождение пасхалки
         function checkEasterEgg() {
@@ -558,6 +575,9 @@ function winGame() {
         // Запускает игру
         function startGame() {
             gameWon = false;  // Явно сбрасываем флаг победы
+            hasActiveSave = false;                     // Очищаем флаг
+            localStorage.removeItem('savedGameState'); // Очищаем локальное сохранение
+            updateContinueButtonVisibility();          // Скрываем кнопку
             gameState = 'playing';  // Принудительно в режим игры
             if (startSound) {
                 if (startSound.state() === 'loaded') {
@@ -641,6 +661,54 @@ function winGame() {
             loop(); // Возобновляет рисование при новой игре
             background(0); // Очищает перед новой игрой
         }
+
+        function pauseAndSaveGame() {
+    if (gameState !== 'playing') return;
+    
+    // Собираем полное состояние
+    const state = {
+        maze: maze,
+        player: { x: player.x, y: player.y, color: player.color },
+        goal: goal,
+        easterEgg: easterEgg,
+        timer: timer,
+        score: score,
+        difficulty: difficulty,
+        gameWon: gameWon
+    };
+    
+    // Сохраняем локально для всех
+    localStorage.setItem('savedGameState', JSON.stringify(state));
+    savedState = state;
+    hasActiveSave = true;
+    
+    // Если авторизован — сохраняем на сервер
+    if (accessToken) {
+        fetch(`${API_URL}/game/session/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                score: score,
+                difficulty: difficulty,
+                time_played: Math.floor(timer),
+                is_completed: gameWon,
+                game_state: state  // Полное состояние
+            })
+        }).catch(e => console.log('Ошибка сохранения на сервер'));
+    }
+    
+    gameState = 'menu';
+    noLoop();  // Останавливаем рисование игры
+}
+
+function showMenuFromGame() {
+    document.getElementById('menu').style.display = 'block';
+    document.getElementById('main-game-menu').style.display = 'block';
+    updateContinueButtonVisibility();
+}
 
         // Показывает шаги обучения
         function showTutorial() {
@@ -783,6 +851,7 @@ function showGameTab(tab) {
 function updateAuthUI() {
     showMainGameMenu();
     loadLeaderboard();
+    updateContinueButtonVisibility();
 }
 
 // Сообщения об ошибках
@@ -832,6 +901,56 @@ async function loadLastSave() {
     } catch (e) {
         console.log('Ошибка сети при загрузке сохранения');
     }
+}
+
+async function loadSavedGameState() {
+    let state = null;
+    
+    // Сначала пытаемся с сервера (если авторизован)
+    if (accessToken) {
+        try {
+            const response = await fetch(`${API_URL}/game/session/load/`, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.game_state && !data.is_completed) {
+                    state = data.game_state;
+                    score = data.score || 0;
+                    difficulty = data.difficulty || 'medium';
+                }
+            }
+        } catch (e) {}
+    }
+    
+    // Если нет с сервера или гость — из localStorage
+    if (!state) {
+        const saved = localStorage.getItem('savedGameState');
+        if (saved) {
+            state = JSON.parse(saved);
+        }
+    }
+    
+    if (state && !state.gameWon) {
+        // Восстанавливаем состояние
+        maze = state.maze;
+        player = { ...state.player, r: cellSize / 4 };
+        goal = state.goal;
+        easterEgg = state.easterEgg;
+        timer = state.timer;
+        score = state.score;
+        difficulty = state.difficulty;
+        document.getElementById('difficulty').value = difficulty;
+        document.getElementById('ballColor').value = player.color;
+        
+        hasActiveSave = true;
+        gameWon = false;
+        gameState = 'playing';
+        return true;
+    }
+    hasActiveSave = false;
+    updateContinueButtonVisibility();
+    return false;
 }
 
 // Сохранение сессии при победе (вызови эту функцию в месте, где игрок достигает цели)
@@ -939,14 +1058,38 @@ function showLeaderboard() {
 }
 
 function startNewGame() {
+    hasActiveSave = false;
+    localStorage.removeItem('savedGameState');
+    updateContinueButtonVisibility();
     startGame(); // Просто запускаем новую игру
 }
 
 async function continueGame() {
-    if (accessToken) {
-        await loadLastSave(); // Подгружаем сохранение
+    await loadSavedGameState();  // Пытаемся загрузить сохранённое состояние
+    
+    if (hasActiveSave) {
+        cellSize = width / maze[0].length;
+        player.r = cellSize / 4;
+        velocity = { x: 0, y: 0 };
+        lastTimerUpdate = performance.now();
+        document.getElementById('menu').style.display = 'none';
+        if (bgMusic && bgMusic.state() === 'loaded') bgMusic.play();
+        loop();
+    } else {
+        startNewGame();  // Если нет сохранения — просто новая игра
     }
-    startGame(); // Запускаем игру полностью (лабиринт генерируется, loop() работает)
+}
+
+function updateContinueButtonVisibility() {
+    // Находим кнопку "Продолжить игру" по её onclick
+    const continueBtn = document.querySelector('#main-game-menu button[onclick="continueGame()"]');
+    if (continueBtn) {
+        if (hasActiveSave) {
+            continueBtn.style.display = 'block';  // Показываем, если есть сохранение
+        } else {
+            continueBtn.style.display = 'none';   // Скрываем, если нет
+        }
+    }
 }
 
 function logout() {
