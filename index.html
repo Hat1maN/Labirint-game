@@ -236,7 +236,7 @@ input, select { padding: 10px; margin: 10px; }
         const ACCELERATION = 25; // Скорость изменения скорости
         const FRICTION = 15; // Замедляет движение игрока
         let lastTimerUpdate = 0; // Метка времени для обновления таймера
-
+        
         // Загрузка звуковых файлов с помощью Howler.js
         function loadSounds() {
             try {
@@ -287,18 +287,23 @@ input, select { padding: 10px; margin: 10px; }
             document.getElementById('ballColor').addEventListener('change', () => {
                 if (player) player.color = document.getElementById('ballColor').value;
             });
-
-            function keyPressed() {
-            keys[key] = true;
-            if (keyCode === ESCAPE && gameState === 'playing') {
-                pauseAndSaveGame();  // Новая функция, которую добавим ниже
-                showMenuFromGame();
-                updateContinueButtonVisibility();  // Показываем кнопку
-                }
-            }
-            loadSounds(); // Загружает звуки
             updateContinueButtonVisibility();
-        }
+            loadSounds();
+            }
+
+function keyPressed() {
+    keys[key] = false;
+    if (keyCode === 27) {  // 27 = код Escape
+        keyCode = 0;       // Предотвращаем стандартное поведение p5.js (остановка sketch)
+        if (gameState === 'playing') {
+            pauseAndSaveGame();
+            showMenuFromGame();
+            }
+            return false;      // Предотвращаем дальнейшую обработку
+            }
+            keys[key] = true;
+            updateContinueButtonVisibility();
+            }
 
         // Адаптация холста при изменении размера окна
         function windowResized() {
@@ -851,7 +856,19 @@ function showGameTab(tab) {
 function updateAuthUI() {
     showMainGameMenu();
     loadLeaderboard();
-    updateContinueButtonVisibility();
+    // Проверяем, есть ли сохранённое состояние при загрузке
+    const saved = localStorage.getItem('savedGameState');
+if (saved) {
+    try {
+        const state = JSON.parse(saved);
+        if (state && !state.gameWon) {
+            hasActiveSave = true;
+        }
+    } catch (e) {
+        localStorage.removeItem('savedGameState');
+    }
+}
+updateContinueButtonVisibility();
 }
 
 // Сообщения об ошибках
@@ -1031,13 +1048,13 @@ function playAsGuest() {
 
 function showMainGameMenu() {
     if (!accessToken) {
-    document.querySelector('#main-game-menu button[onclick="continueGame()"]').style.display = 'none';
     }
     document.getElementById('start-menu').style.display = 'none';
     document.getElementById('auth-panel').style.display = 'none';
     document.getElementById('main-game-menu').style.display = 'block';
     document.getElementById('username-display').textContent = currentUser || 'Гость';
     loadLeaderboard();
+    updateContinueButtonVisibility();
 }
 
 function backToMainMenu() {
@@ -1090,6 +1107,72 @@ function updateContinueButtonVisibility() {
             continueBtn.style.display = 'none';   // Скрываем, если нет
         }
     }
+}
+
+function keyPressed() {
+    if (keyCode === 27) {  // 27 = код клавиши Escape
+        keyCode = 0;       // Отключаем стандартное поведение p5.js
+        if (gameState === 'playing') {
+            pauseAndSaveGame();
+            showMenuFromGame();
+        }
+        return false;      // Блокируем дальнейшую обработку
+    }
+    keys[key] = true;
+    return false;  // Предотвращаем прокрутку страницы стрелками
+}
+
+function keyReleased() {
+    keys[key] = false;
+    if (keyCode === 27) {
+        return false;
+    }
+}
+
+function pauseAndSaveGame() {
+    if (gameState !== 'playing') return;
+    
+    const state = {
+        maze: maze,
+        player: { x: player.x, y: player.y, color: player.color },
+        goal: goal,
+        easterEgg: easterEgg,
+        timer: timer,
+        score: score,
+        difficulty: difficulty,
+        gameWon: gameWon
+    };
+    
+    localStorage.setItem('savedGameState', JSON.stringify(state));
+    hasActiveSave = true;
+    
+    // Если авторизован — сохраняем на сервер (необязательно для паузы, но можно)
+    if (accessToken) {
+        fetch(`${API_URL}/game/session/save/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                score: score,
+                difficulty: difficulty,
+                time_played: Math.floor(timer),
+                is_completed: false,
+                game_state: state
+            })
+        }).catch(e => console.log('Ошибка сохранения на сервер при паузе'));
+    }
+    
+    gameState = 'menu';
+    noLoop();  // Останавливаем игру
+    updateContinueButtonVisibility();
+}
+
+function showMenuFromGame() {
+    document.getElementById('menu').style.display = 'block';
+    document.getElementById('main-game-menu').style.display = 'block';
+    updateContinueButtonVisibility();
 }
 
 function logout() {
