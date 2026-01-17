@@ -175,13 +175,38 @@ input, select { padding: 10px; margin: 10px; }
             <button onclick="logout()">Выйти</button>
         </div>
     </div>
-        
+     
+    <button onclick="showProfile()">Профиль</button>
     <button onclick="showSettings()">Настройки</button>
     <button onclick="showLeaderboard()">Лидерборд</button>
-    <button onclick="continueGame()">Продолжить игру</button>
     <button onclick="startNewGame()">Начать новую игру</button>
+    <button onclick="continueGame()">Продолжить игру</button>
 </div>
     
+<!-- Панель профиля -->
+<div id="profile-panel" style="display: none;">
+    <h3>Ваш профиль</h3>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+        <img id="profile-avatar" src="" alt="Аватар" style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 4px solid white;">
+        <p>Текущее имя: <strong id="profile-username"></strong></p>
+    </div>
+    
+    <label for="profile-bio">Биография</label>
+    <textarea id="profile-bio" placeholder="Расскажите о себе" style="width: 100%; height: 100px; padding: 10px;"></textarea>
+    
+    <label for="profile-dob">Дата рождения</label>
+    <input type="date" id="profile-dob">
+    
+    <label for="profile-avatar-input">Новый аватар</label>
+    <input type="file" id="profile-avatar-input" accept="image/*">
+    
+    <button onclick="saveProfile()">Сохранить профиль</button>
+    <p id="profile-message" style="color: red; margin-top: 10px;"></p>
+    
+    <button onclick="backToMainMenu()">Назад</button>
+</div>
+
     <!-- Панель настроек -->
     <div id="settings-panel" style="display: none;">
         <h3>Настройки</h3>
@@ -1038,6 +1063,7 @@ function showMainGameMenu() {
 function backToMainMenu() {
     document.getElementById('settings-panel').style.display = 'none';
     document.getElementById('leaderboard-panel').style.display = 'none';
+    document.getElementById('profile-panel').style.display = 'none'; 
     document.getElementById('main-game-menu').style.display = 'block';
 }
 
@@ -1197,6 +1223,77 @@ function changeAccount() {
         document.getElementById('start-menu').style.display = 'block';
     }
 }
+
+function showProfile() {
+    document.getElementById('main-game-menu').style.display = 'none';
+    document.getElementById('profile-panel').style.display = 'block';
+    loadProfile(); // Загружаем текущий профиль
+}
+
+async function loadProfile() {
+    if (!accessToken) {
+        document.getElementById('profile-message').textContent = 'Войдите в аккаунт';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/auth/profile/`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            document.getElementById('profile-username').textContent = data.user.username;
+            document.getElementById('profile-bio').value = data.bio || '';
+            document.getElementById('profile-dob').value = data.date_of_birth || '';
+            
+            // Полный URL аватара с кэш-бустером
+            let avatarUrl = 'https://via.placeholder.com/150?text=Нет+аватара'; // Плейсхолдер по умолчанию
+            if (data.avatar) {
+                avatarUrl = `http://127.0.0.1:8001${data.avatar}?t=${new Date().getTime()}`; // Замени 8001 на 8000 если порт другой
+            }
+            document.getElementById('profile-avatar').src = avatarUrl;
+        } else {
+            document.getElementById('profile-message').textContent = 'Ошибка загрузки профиля';
+        }
+    } catch (e) {
+        document.getElementById('profile-message').textContent = 'Нет связи с сервером';
+    }
+}
+
+async function saveProfile() {
+    if (!accessToken) {
+        document.getElementById('profile-message').textContent = 'Войдите в аккаунт';
+        return;
+    }
+    const bio = document.getElementById('profile-bio').value;
+    const dob = document.getElementById('profile-dob').value;
+    const avatarFile = document.getElementById('profile-avatar-input').files[0];
+
+    const formData = new FormData();
+    formData.append('bio', bio);
+    if (dob) formData.append('date_of_birth', dob);
+    if (avatarFile) formData.append('avatar', avatarFile);
+
+    try {
+        const response = await fetch(`${API_URL}/auth/profile/update/`, {
+            method: 'PATCH',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+                // НЕ ставим 'Content-Type' — браузер сам поставит multipart с boundary
+            },
+            body: formData
+        });
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('profile-message').textContent = 'Профиль сохранён!';
+            loadProfile(); // Обновляем отображение (новый аватар)
+        } else {
+            document.getElementById('profile-message').textContent = data.detail || 'Ошибка сохранения';
+        }
+    } catch (e) {
+        document.getElementById('profile-message').textContent = 'Нет связи с сервером';
+    }
+}
+
     </script>
 </body>
 </html>
