@@ -254,6 +254,12 @@ input, select { padding: 10px; margin: 10px; }
         <button onclick="backToMainMenu()" style="width: 100%; padding: 15px; margin-top: 20px;">Назад</button>
     </div>
 </div>
+
+<div id="tutorial" style="display:none;">
+    <p id="tutorial-text"></p>
+    <button onclick="nextTutorial()">Далее</button>
+</div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script> <!-- p5.js для работы с холстом и рисования -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script> <!-- Howler.js для работы со звуком -->
     <script>
@@ -705,7 +711,6 @@ function winGame() {
 
             document.getElementById('menu').style.display = 'none';
 
-            gameState = 'playing';  // Запускает рисование лабиринта в draw()
             loop(); // Возобновляет рисование при новой игре
             background(0); // Очищает перед новой игрой
         }
@@ -1081,8 +1086,8 @@ function showMainGameMenu() {
 function backToMainMenu() {
     document.getElementById('settings-panel').style.display = 'none';
     document.getElementById('leaderboard-panel').style.display = 'none';
+    document.getElementById('friends-panel').style.display = 'none';
     document.getElementById('profile-panel').style.display = 'none';
-    document.getElementById('friends-panel').style.display = 'none'; 
     document.getElementById('main-game-menu').style.display = 'block';
 }
 
@@ -1094,7 +1099,7 @@ function showSettings() {
 function showLeaderboard() {
     document.getElementById('main-game-menu').style.display = 'none';
     document.getElementById('leaderboard-panel').style.display = 'block';
-    loadLeaderboard(); // Автоматически обновляем лидерборд при открытии
+    loadLeaderboard();
 }
 
 function startNewGame() {
@@ -1320,8 +1325,10 @@ function showFriends() {
 }
 
 async function loadFriends() {
+    document.getElementById('friends-message').textContent = 'Загрузка...';
     if (!accessToken) {
         document.getElementById('friends-message').textContent = 'Войдите в аккаунт';
+        document.getElementById('friends-list').innerHTML = '';
         return;
     }
     try {
@@ -1331,14 +1338,22 @@ async function loadFriends() {
         if (response.ok) {
             const friends = await response.json();
             const list = document.getElementById('friends-list');
-            list.innerHTML = friends.length ? '' : 'Нет друзей';
-            friends.forEach(friend => {
-                list.innerHTML += `
-                    <div style="padding: 10px; border-bottom: 1px solid #444;">
-                        <strong>${friend.username}</strong> — ${friend.max_score} очков (ранг ${friend.rank})
-                        <button onclick="removeFriend('${friend.username}')" style="float: right;">Удалить</button>
-                    </div>`;
-            });
+            list.innerHTML = ''; // Очищаем полностью
+            if (friends.length === 0) {
+                list.innerHTML = '<p style="color: #aaa; text-align: center;">Нет друзей</p>';
+            } else {
+                friends.forEach(friend => {
+                    list.innerHTML += `
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${friend.username}</strong><br>
+                                ${friend.max_score || 0} очков (ранг ${friend.rank || '-'})
+                            </div>
+                            <button onclick="removeFriend('${friend.username}')" style="background: #f44336; color: white; padding: 10px; border-radius: 5px;">Удалить</button>
+                        </div>`;
+                });
+            }
+            document.getElementById('friends-message').textContent = '';
         } else {
             document.getElementById('friends-message').textContent = 'Ошибка загрузки друзей';
         }
@@ -1364,11 +1379,19 @@ async function addFriend() {
             body: JSON.stringify({ username })
         });
         const data = await response.json();
-        if (response.ok) {
-            document.getElementById('friends-message').textContent = 'Друг добавлен!';
-            document.getElementById('friend-username').value = '';
-            loadFriends();
-        } else {
+if (response.ok) {
+    const msg = document.getElementById('friends-message');
+    msg.textContent = 'Заявка отправлена';
+    
+    // НЕ даём UI перерисоваться сразу
+    setTimeout(() => {
+        msg.textContent = '';
+    }, 3000);
+
+    document.getElementById('friend-username').value = '';
+    loadFriends();
+}
+ else {
             document.getElementById('friends-message').textContent = data.error || 'Ошибка добавления';
         }
     } catch (e) {

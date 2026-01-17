@@ -4,6 +4,7 @@ from rest_framework import status, permissions
 from .models import GameSession, LeaderboardEntry, UserAchievement, Friendship
 from .serializers import GameSessionSerializer, LeaderboardSerializer, UserAchievementSerializer, FriendSerializer
 from django.db.models import Max
+from django.contrib.auth.models import User
 
 class SaveGameSessionView(APIView):
     def post(self, request):
@@ -47,14 +48,29 @@ class UserAchievementsView(APIView):
         return Response(serializer.data)
 
 class AddFriendView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def post(self, request):
-        to_username = request.data.get('username')
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите username'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if username == request.user.username:
+            return Response({'error': 'Нельзя добавить себя в друзья'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            to_user = User.objects.get(username=to_username)
-            Friendship.objects.create(from_user=request.user, to_user=to_user)
-            return Response({'message': 'Запрос отправлен'})
+            friend = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            Friendship.objects.get_or_create(from_user=request.user, to_user=friend)
+            Friendship.objects.get_or_create(from_user=friend, to_user=request.user)  # Симметрично
+            return Response({'message': 'Друг добавлен'}, status=status.HTTP_200_OK)
+        except IntegrityError:
+            return Response({'error': 'Вы уже друзья'}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': 'Ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FriendsListView(APIView):
     def get(self, request):
