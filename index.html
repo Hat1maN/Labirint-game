@@ -177,6 +177,7 @@ input, select { padding: 10px; margin: 10px; }
     </div>
      
     <button onclick="showProfile()">Профиль</button>
+    <button onclick="showFriends()">Друзья</button>
     <button onclick="showSettings()">Настройки</button>
     <button onclick="showLeaderboard()">Лидерборд</button>
     <button onclick="startNewGame()">Начать новую игру</button>
@@ -205,6 +206,23 @@ input, select { padding: 10px; margin: 10px; }
     <p id="profile-message" style="color: red; margin-top: 10px;"></p>
     
     <button onclick="backToMainMenu()">Назад</button>
+</div>
+
+<!-- Панель друзей -->
+<div id="friends-panel" style="display: none;">
+    <h3>Друзья</h3>
+    
+    <div style="margin-bottom: 20px;">
+        <input type="text" id="friend-username" placeholder="Username друга" style="width: 70%; padding: 10px;">
+        <button onclick="addFriend()">Добавить в друзья</button>
+    </div>
+    
+    <p id="friends-message" style="color: red;"></p>
+    
+    <h4>Список друзей</h4>
+    <div id="friends-list" style="max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.1); padding: 10px;"></div>
+    
+    <button onclick="backToMainMenu()" style="width: 100%; padding: 15px; margin-top: 20px;">Назад</button>
 </div>
 
     <!-- Панель настроек -->
@@ -1063,7 +1081,8 @@ function showMainGameMenu() {
 function backToMainMenu() {
     document.getElementById('settings-panel').style.display = 'none';
     document.getElementById('leaderboard-panel').style.display = 'none';
-    document.getElementById('profile-panel').style.display = 'none'; 
+    document.getElementById('profile-panel').style.display = 'none';
+    document.getElementById('friends-panel').style.display = 'none'; 
     document.getElementById('main-game-menu').style.display = 'block';
 }
 
@@ -1291,6 +1310,88 @@ async function saveProfile() {
         }
     } catch (e) {
         document.getElementById('profile-message').textContent = 'Нет связи с сервером';
+    }
+}
+
+function showFriends() {
+    document.getElementById('main-game-menu').style.display = 'none';
+    document.getElementById('friends-panel').style.display = 'block';
+    loadFriends(); // Загружаем список друзей при открытии
+}
+
+async function loadFriends() {
+    if (!accessToken) {
+        document.getElementById('friends-message').textContent = 'Войдите в аккаунт';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/game/friends/`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (response.ok) {
+            const friends = await response.json();
+            const list = document.getElementById('friends-list');
+            list.innerHTML = friends.length ? '' : 'Нет друзей';
+            friends.forEach(friend => {
+                list.innerHTML += `
+                    <div style="padding: 10px; border-bottom: 1px solid #444;">
+                        <strong>${friend.username}</strong> — ${friend.max_score} очков (ранг ${friend.rank})
+                        <button onclick="removeFriend('${friend.username}')" style="float: right;">Удалить</button>
+                    </div>`;
+            });
+        } else {
+            document.getElementById('friends-message').textContent = 'Ошибка загрузки друзей';
+        }
+    } catch (e) {
+        document.getElementById('friends-message').textContent = 'Нет связи с сервером';
+    }
+}
+
+async function addFriend() {
+    const username = document.getElementById('friend-username').value.trim();
+    if (!username) return;
+    if (!accessToken) {
+        document.getElementById('friends-message').textContent = 'Войдите в аккаунт';
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/game/friends/add/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ username })
+        });
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('friends-message').textContent = 'Друг добавлен!';
+            document.getElementById('friend-username').value = '';
+            loadFriends();
+        } else {
+            document.getElementById('friends-message').textContent = data.error || 'Ошибка добавления';
+        }
+    } catch (e) {
+        document.getElementById('friends-message').textContent = 'Нет связи с сервером';
+    }
+}
+
+async function removeFriend(username) {
+    if (!confirm(`Удалить ${username} из друзей?`)) return;
+    try {
+        const response = await fetch(`${API_URL}/game/friends/remove/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ username })
+        });
+        if (response.ok) {
+            loadFriends();
+        }
+    } catch (e) {
+        // Игнорируем ошибку удаления
     }
 }
 
