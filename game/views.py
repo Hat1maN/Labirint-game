@@ -147,22 +147,59 @@ class FriendsListView(APIView):
 
     def get(self, request):
         # Входящие заявки
-        incoming = Friendship.objects.filter(to_user=request.user, status='pending').values('from_user__username')
-        incoming = [f['from_user__username'] for f in incoming]
+        incoming = Friendship.objects.filter(
+            to_user=request.user, 
+            status='pending'
+        ).values_list('from_user__username', flat=True)
+        incoming = list(incoming)
         
-        # Друзья (accepted)
-        friends = Friendship.objects.filter(from_user=request.user, status='accepted') | Friendship.objects.filter(to_user=request.user, status='accepted')
-        friends = friends.distinct()
+        # Друзья (accepted) - находим всех пользователей, с которыми есть дружба
+        # Ищем где пользователь является from_user
+        friendships_as_from = Friendship.objects.filter(
+            from_user=request.user, 
+            status='accepted'
+        ).select_related('to_user')
+        
+        # Ищем где пользователь является to_user
+        friendships_as_to = Friendship.objects.filter(
+            to_user=request.user, 
+            status='accepted'
+        ).select_related('from_user')
+        
+        friend_set = set()  # Используем set для уникальности
         friend_list = []
-        for f in friends:
-            friend_user = f.to_user if f.from_user == request.user else f.from_user
-            max_score = GameSession.objects.filter(user=friend_user, is_completed=True).aggregate(max_score=models.Max('score'))['max_score'] or 0
-            rank = LeaderboardEntry.objects.filter(score__gt=max_score).count() + 1
-            friend_list.append({
-                'username': friend_user.username,
-                'max_score': max_score,
-                'rank': rank
-            })
+        
+        # Обрабатываем дружбу, где пользователь является from_user
+        for friendship in friendships_as_from:
+            friend_user = friendship.to_user
+            if friend_user.id not in friend_set:
+                friend_set.add(friend_user.id)
+                max_score = GameSession.objects.filter(
+                    user=friend_user, 
+                    is_completed=True
+                ).aggregate(max_score=models.Max('score'))['max_score'] or 0
+                rank = LeaderboardEntry.objects.filter(score__gt=max_score).count() + 1
+                friend_list.append({
+                    'username': friend_user.username,
+                    'max_score': max_score,
+                    'rank': rank
+                })
+        
+        # Обрабатываем дружбу, где пользователь является to_user
+        for friendship in friendships_as_to:
+            friend_user = friendship.from_user
+            if friend_user.id not in friend_set:
+                friend_set.add(friend_user.id)
+                max_score = GameSession.objects.filter(
+                    user=friend_user, 
+                    is_completed=True
+                ).aggregate(max_score=models.Max('score'))['max_score'] or 0
+                rank = LeaderboardEntry.objects.filter(score__gt=max_score).count() + 1
+                friend_list.append({
+                    'username': friend_user.username,
+                    'max_score': max_score,
+                    'rank': rank
+                })
         
         return Response({
             'incoming_requests': incoming,
