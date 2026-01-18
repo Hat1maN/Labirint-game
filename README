@@ -1,10 +1,23 @@
 python -m venv venv
-venv\Scripts\activate
+source venv/bin/activate  # Для Linux/Mac
+venv\Scripts\activate   # Для Windows
+
 docker-compose up -d --build
 docker-compose down
 
+docker-compose exec web python manage.py createsuperuser
 
 важные ссылки:
 
 http://127.0.0.1:8001/admin/ админ панель
+http://127.0.0.1:5500/index.html игра
 
+#(если понадобится)
+# 1. Создать миграции
+docker-compose exec web python manage.py makemigrations
+
+# 2. Применить миграции
+docker-compose exec web python manage.py migrate
+
+# 3. Проверить статус
+docker-compose exec web python manage.py showmigrations
