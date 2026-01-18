@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from django.db.models import Max
+from django.db import models, IntegrityError
+from django.contrib.auth.models import User
 from .models import GameSession, LeaderboardEntry, UserAchievement, Friendship
 from .serializers import GameSessionSerializer, LeaderboardSerializer, UserAchievementSerializer, FriendSerializer
-from django.db.models import Max
-from django.contrib.auth.models import User
 
 class SaveGameSessionView(APIView):
     def post(self, request):
@@ -47,33 +48,123 @@ class UserAchievementsView(APIView):
         serializer = UserAchievementSerializer(achievements, many=True)
         return Response(serializer.data)
 
-class AddFriendView(APIView):
+class SendFriendRequestView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         username = request.data.get('username')
         if not username:
             return Response({'error': 'Укажите username'}, status=status.HTTP_400_BAD_REQUEST)
-        
         if username == request.user.username:
-            return Response({'error': 'Нельзя добавить себя в друзья'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({'error': 'Нельзя добавить себя'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            friend = User.objects.get(username=username)
+            to_user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Удаляем rejected, если была
+        Friendship.objects.filter(from_user=request.user, to_user=to_user, status='rejected').delete()
+        
+        # Проверяем существующие
         try:
-            Friendship.objects.get_or_create(from_user=request.user, to_user=friend)
-            Friendship.objects.get_or_create(from_user=friend, to_user=request.user)  # Симметрично
-            return Response({'message': 'Друг добавлен'}, status=status.HTTP_200_OK)
-        except IntegrityError:
-            return Response({'error': 'Вы уже друзья'}, status=status.HTTP_400_BAD_REQUEST)
+            existing = Friendship.objects.get(from_user=request.user, to_user=to_user)
+            if existing.status == 'pending':
+                return Response({'error': 'Заявка уже отправлена'}, status=status.HTTP_400_BAD_REQUEST)
+            if existing.status == 'accepted':
+                return Response({'error': 'Вы уже друзья'}, status=status.HTTP_400_BAD_REQUEST)
+        except Friendship.DoesNotExist:
+            pass
+        
+        Friendship.objects.create(from_user=request.user, to_user=to_user, status='pending')
+        return Response({'message': 'Заявка отправлена'}, status=status.HTTP_200_OK)
+
+class AcceptFriendRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите username'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from_user = User.objects.get(username=username)
+            friendship = Friendship.objects.get(from_user=from_user, to_user=request.user, status='pending')
+            friendship.status = 'accepted'
+            friendship.save()
+            # Симметричная дружба
+            Friendship.objects.get_or_create(from_user=request.user, to_user=from_user, defaults={'status': 'accepted'})
+            return Response({'message': 'Заявка принята'}, status=status.HTTP_200_OK)
+        except Friendship.DoesNotExist:
+            return Response({'error': 'Заявка не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+class RejectFriendRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите username'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from_user = User.objects.get(username=username)
+            friendship = Friendship.objects.get(from_user=from_user, to_user=request.user, status='pending')
+            friendship.delete()  # Удаляем запись полностью
+            return Response({'message': 'Заявка отклонена'}, status=status.HTTP_200_OK)
+        except Friendship.DoesNotExist:
+            return Response({'error': 'Заявка не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+class RemoveFriendView(APIView):  # Добавлен новый класс
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        username = request.data.get('username')
+        if not username:
+            return Response({'error': 'Укажите username'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            # Находим друга
+            friend_user = User.objects.get(username=username)
+            
+            # Удаляем обе связи (симметрично)
+            Friendship.objects.filter(
+                from_user=request.user, 
+                to_user=friend_user, 
+                status='accepted'
+            ).delete()
+            
+            Friendship.objects.filter(
+                from_user=friend_user, 
+                to_user=request.user, 
+                status='accepted'
+            ).delete()
+            
+            return Response({'message': 'Друг удален'}, status=status.HTTP_200_OK)
+            
+        except User.DoesNotExist:
+            return Response({'error': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({'error': 'Ошибка сервера'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Ошибка удаления'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class FriendsListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     def get(self, request):
-        friends = Friendship.objects.filter(from_user=request.user, accepted=True)
-        serializer = FriendSerializer(friends, many=True)
-        return Response(serializer.data)
+        # Входящие заявки
+        incoming = Friendship.objects.filter(to_user=request.user, status='pending').values('from_user__username')
+        incoming = [f['from_user__username'] for f in incoming]
+        
+        # Друзья (accepted)
+        friends = Friendship.objects.filter(from_user=request.user, status='accepted') | Friendship.objects.filter(to_user=request.user, status='accepted')
+        friends = friends.distinct()
+        friend_list = []
+        for f in friends:
+            friend_user = f.to_user if f.from_user == request.user else f.from_user
+            max_score = GameSession.objects.filter(user=friend_user, is_completed=True).aggregate(max_score=models.Max('score'))['max_score'] or 0
+            rank = LeaderboardEntry.objects.filter(score__gt=max_score).count() + 1
+            friend_list.append({
+                'username': friend_user.username,
+                'max_score': max_score,
+                'rank': rank
+            })
+        
+        return Response({
+            'incoming_requests': incoming,
+            'friends': friend_list
+        })
