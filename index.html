@@ -210,19 +210,25 @@ input, select { padding: 10px; margin: 10px; }
 
 <!-- Панель друзей -->
 <div id="friends-panel" style="display: none;">
-    <h3>Друзья</h3>
+    <h3>Друзья и заявки</h3>
     
-    <div style="margin-bottom: 20px;">
-        <input type="text" id="friend-username" placeholder="Username друга" style="width: 70%; padding: 10px;">
-        <button onclick="addFriend()">Добавить в друзья</button>
+    <!-- Добавление друга (заявка) -->
+    <div style="margin-bottom: 30px;">
+        <input type="text" id="friend-username" placeholder="Username друга">
+        <button onclick="sendFriendRequest()">Отправить заявку</button>
+        <p id="friends-message" style="color: yellow; margin-top: 10px;"></p>
     </div>
     
-    <p id="friends-message" style="color: red;"></p>
+    <!-- Входящие заявки -->
+    <h4>Входящие заявки</h4>
+    <div id="incoming-requests-list"></div>
     
-    <h4>Список друзей</h4>
-    <div id="friends-list" style="max-height: 300px; overflow-y: auto; background: rgba(255,255,255,0.1); padding: 10px;"></div>
+    <!-- Список друзей -->
+    <h4>Мои друзья</h4>
+    <div id="friends-list"></div>
     
-    <button onclick="backToMainMenu()" style="width: 100%; padding: 15px; margin-top: 20px;">Назад</button>
+    <br>
+    <button onclick="backToMainMenu()">Назад</button>
 </div>
 
     <!-- Панель настроек -->
@@ -1321,7 +1327,7 @@ async function saveProfile() {
 function showFriends() {
     document.getElementById('main-game-menu').style.display = 'none';
     document.getElementById('friends-panel').style.display = 'block';
-    loadFriends(); // Загружаем список друзей при открытии
+    loadFriendsData(); // Загружаем список друзей при открытии
 }
 
 async function loadFriends() {
@@ -1362,15 +1368,92 @@ async function loadFriends() {
     }
 }
 
-async function addFriend() {
+async function loadIncomingRequests() {
+    const list = document.getElementById('incoming-requests-list');
+    list.innerHTML = '<p>Загрузка...</p>';
+    
+    if (!accessToken) {
+        list.innerHTML = '<p style="color: #aaa;">Войдите в аккаунт</p>';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/game/friends/requests/incoming/`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (response.ok) {
+            const requests = await response.json();
+            if (requests.length === 0) {
+                list.innerHTML = '<p style="color: #aaa; text-align: center;">Нет входящих заявок</p>';
+            } else {
+                list.innerHTML = '';
+                requests.forEach(req => {
+                    list.innerHTML += `
+                        <div style="background: rgba(255,255,255,0.1); padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong>${req.username}</strong><br>
+                                ${req.max_score || 0} очков (ранг ${req.rank || '-'})
+                            </div>
+                            <div>
+                                <button onclick="acceptFriendRequest('${req.username}')" style="background: #4caf50; color: white; padding: 8px; margin: 5px; border-radius: 5px;">Принять</button>
+                                <button onclick="rejectFriendRequest('${req.username}')" style="background: #f44336; color: white; padding: 8px; margin: 5px; border-radius: 5px;">Отклонить</button>
+                            </div>
+                        </div>`;
+                });
+            }
+        } else {
+            list.innerHTML = '<p style="color: red;">Ошибка загрузки заявок</p>';
+        }
+    } catch (e) {
+        list.innerHTML = '<p style="color: red;">Нет связи с сервером</p>';
+    }
+}
+
+async function acceptFriendRequest(username) {
+    await handleFriendRequest(username, 'accept');
+}
+
+async function rejectFriendRequest(username) {
+    await handleFriendRequest(username, 'reject');
+}
+
+async function handleFriendRequest(username, action) {
+    try {
+        const response = await fetch(`${API_URL}/game/friends/${action}/`, {  // /accept/ или /reject/
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({ username })
+        });
+        if (response.ok) {
+            loadFriendsData();  // Обновляем всё
+        }
+    } catch (e) {
+        // Игнорируем ошибку
+    }
+}
+
+// Общая функция загрузки друзей + заявок
+async function loadFriendsData() {
+    await loadFriends();         // Текущая функция для принятых друзей
+    await loadIncomingRequests(); // Новая для входящих заявок
+}
+
+async function sendFriendRequest() {
     const username = document.getElementById('friend-username').value.trim();
-    if (!username) return;
+    if (!username) {
+        document.getElementById('friends-message').textContent = 'Введите username';
+        return;
+    }
     if (!accessToken) {
         document.getElementById('friends-message').textContent = 'Войдите в аккаунт';
         return;
     }
+    
     try {
-        const response = await fetch(`${API_URL}/game/friends/add/`, {
+        const response = await fetch(`${API_URL}/game/friends/add/`, {  // Или /game/friends/request/ если изменил на бэкенде
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1379,20 +1462,16 @@ async function addFriend() {
             body: JSON.stringify({ username })
         });
         const data = await response.json();
-if (response.ok) {
-    const msg = document.getElementById('friends-message');
-    msg.textContent = 'Заявка отправлена';
-    
-    // НЕ даём UI перерисоваться сразу
-    setTimeout(() => {
-        msg.textContent = '';
-    }, 3000);
-
-    document.getElementById('friend-username').value = '';
-    loadFriends();
-}
- else {
-            document.getElementById('friends-message').textContent = data.error || 'Ошибка добавления';
+        if (response.ok) {
+            const msg = document.getElementById('friends-message');
+            msg.textContent = 'Заявка отправлена!';
+            msg.style.color = 'green';
+            setTimeout(() => { msg.textContent = ''; }, 3000);
+            document.getElementById('friend-username').value = '';
+            loadFriendsData();  // Обновляем всё
+        } else {
+            document.getElementById('friends-message').textContent = data.error || 'Ошибка (уже друг/заявка отправлена)';
+            document.getElementById('friends-message').style.color = 'red';
         }
     } catch (e) {
         document.getElementById('friends-message').textContent = 'Нет связи с сервером';
@@ -1401,6 +1480,7 @@ if (response.ok) {
 
 async function removeFriend(username) {
     if (!confirm(`Удалить ${username} из друзей?`)) return;
+    
     try {
         const response = await fetch(`${API_URL}/game/friends/remove/`, {
             method: 'POST',
@@ -1411,10 +1491,12 @@ async function removeFriend(username) {
             body: JSON.stringify({ username })
         });
         if (response.ok) {
-            loadFriends();
+            loadFriendsData();  // Обновляем список друзей + заявки после удаления
+        } else {
+            alert('Ошибка удаления друга');
         }
     } catch (e) {
-        // Игнорируем ошибку удаления
+        alert('Нет связи с сервером');
     }
 }
 
